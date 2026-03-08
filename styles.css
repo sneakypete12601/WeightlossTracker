@@ -19,9 +19,9 @@
   --color-border-focus:  #4ade80;
 
   /* Accent colours */
-  --color-accent:        #4ade80;   /* green — weight loss positive */
-  --color-accent-dim:    rgba(74, 222, 128, 0.15);
-  --color-accent-hover:  #22c55e;
+  --color-accent:        #ef4444;   /* red — Forge Protocol brand */
+  --color-accent-dim:    rgba(239, 68, 68, 0.15);
+  --color-accent-hover:  #dc2626;
   --color-primary:       #60a5fa;   /* blue — neutral actions */
   --color-primary-hover: #3b82f6;
   --color-danger:        #f87171;   /* red — warnings, delete, weight gain */
@@ -178,6 +178,8 @@ p  { line-height: var(--line-height-base); }
 #nav-brand-icon-img {
   height: 28px;
   width: auto;
+  max-width: 32px;
+  object-fit: contain;
 }
 
 #nav-links {
