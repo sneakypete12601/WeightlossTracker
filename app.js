@@ -90,14 +90,21 @@ const Storage = {
   async load() {
     try {
       let saved = null;
-      const snap = await Storage._docRef().get();
-      if (snap.exists) {
-        saved = snap.data();
-      } else {
-        // Firestore has no data — try local cache (first load, or rules not yet set up)
+
+      // Try Firestore — isolated so a permissions error doesn't block the localStorage fallback
+      try {
+        const snap = await Storage._docRef().get();
+        if (snap.exists) saved = snap.data();
+      } catch (fsErr) {
+        console.warn('Firestore load failed, using local cache:', fsErr.message);
+      }
+
+      // Fall back to localStorage cache (covers: rules not set up, offline, new device before first Firestore sync)
+      if (!saved) {
         const cached = localStorage.getItem(Storage._cacheKey());
         if (cached) saved = JSON.parse(cached);
       }
+
       if (!saved) return false;
       if (saved.profile)  State.profile  = saved.profile;
       if (saved.entries)  State.entries  = saved.entries;
