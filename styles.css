@@ -175,9 +175,9 @@ p  { line-height: var(--line-height-base); }
   flex-shrink: 0;
 }
 
-.nav-brand-icon {
-  color: var(--color-accent);
-  font-size: 0.875rem;
+#nav-brand-icon-img {
+  height: 28px;
+  width: auto;
 }
 
 #nav-links {
@@ -2606,20 +2606,13 @@ form#daily-entry-form.form-locked input[type="range"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
   margin-bottom: 1.75rem;
 }
 
-.auth-logo-icon {
-  font-size: 1.75rem;
-  color: var(--accent);
-}
-
-.auth-logo-text {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: 0.01em;
+#auth-logo-img {
+  max-width: 260px;
+  width: 100%;
+  height: auto;
 }
 
 #auth-title {

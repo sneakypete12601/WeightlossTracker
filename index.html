@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Weight Loss Tracker</title>
+  <title>Forge Protocol</title>
+  <link rel="icon" href="page.ico">
   <link rel="stylesheet" href="styles.css">
   <!-- Firebase compat SDK (no build step required) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -28,11 +29,10 @@
   <div id="auth-overlay">
     <div id="auth-card">
       <div id="auth-logo">
-        <span class="auth-logo-icon">&#9650;</span>
-        <span class="auth-logo-text">Weight Tracker</span>
+        <img src="forgeprotocol%20logo.png" alt="Forge Protocol" id="auth-logo-img">
       </div>
       <h1 id="auth-title">Welcome back</h1>
-      <p id="auth-subtitle">Sign in to access your personal weight loss data.</p>
+      <p id="auth-subtitle">Sign in to access your personal data.</p>
       <button id="auth-google-btn" onclick="Auth.signInWithGoogle()">
         <svg id="auth-google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -52,7 +52,7 @@
   <div id="wizard-overlay" class="hidden">
     <div id="wizard-modal">
       <div id="wizard-header">
-        <h1>Welcome to Your Weight Loss Tracker</h1>
+        <h1>Welcome to Forge Protocol</h1>
         <p>Let's set up your profile before we begin. This takes about 60 seconds.</p>
         <div id="wizard-progress">
           <div class="wizard-step-dot active" data-step="1"></div>
@@ -144,8 +144,8 @@
     <!-- TOP NAVIGATION -->
     <nav id="main-nav">
       <div id="nav-brand">
-        <span class="nav-brand-icon">&#9650;</span>
-        Weight Tracker
+        <img src="forgeprotocol%20logo%20icon.png" alt="" id="nav-brand-icon-img">
+        FORGE PROTOCOL
       </div>
       <ul id="nav-links">
         <li><button class="nav-btn active" data-page="dashboard">Summary</button></li>
