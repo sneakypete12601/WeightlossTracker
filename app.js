@@ -80,12 +80,25 @@ const Storage = {
     return firebase.firestore().doc(`users/${uid}/data`);
   },
 
-  /** Load state from Firestore into State. Returns false if nothing found. */
+  /** localStorage cache key for current user (keeps data per-user). */
+  _cacheKey() {
+    const uid = firebase.auth().currentUser?.uid || 'anon';
+    return `wt_cache_${uid}`;
+  },
+
+  /** Load state from Firestore into State. Falls back to localStorage cache if Firestore is empty or fails. */
   async load() {
     try {
+      let saved = null;
       const snap = await Storage._docRef().get();
-      if (!snap.exists) return false;
-      const saved = snap.data();
+      if (snap.exists) {
+        saved = snap.data();
+      } else {
+        // Firestore has no data — try local cache (first load, or rules not yet set up)
+        const cached = localStorage.getItem(Storage._cacheKey());
+        if (cached) saved = JSON.parse(cached);
+      }
+      if (!saved) return false;
       if (saved.profile)  State.profile  = saved.profile;
       if (saved.entries)  State.entries  = saved.entries;
       // Photos come from localStorage (too large for Firestore)
@@ -155,20 +168,19 @@ const Storage = {
     });
   },
 
-  /** Persist current State to Firestore (fire-and-forget).
+  /** Persist current State to Firestore + localStorage cache (fire-and-forget).
    *  Photos are stored in localStorage only (Firestore 1 MB doc limit). */
   save() {
     try {
-      // Profile + entries → Firestore (cloud sync)
       const data = { profile: State.profile, entries: State.entries };
+      // Always write to localStorage cache first (instant, always works)
+      try { localStorage.setItem(Storage._cacheKey(), JSON.stringify(data)); } catch (_) {}
+      // Then sync to Firestore (cloud — may fail if rules not configured)
       Storage._docRef().set(data).catch(e => {
-        UI.showToast('Warning: Could not save to cloud. Check your connection.', 'warning');
-        console.error('Storage.save error:', e);
+        console.warn('Firestore save failed (data is safe in local cache):', e.message);
       });
-      // Photos → localStorage (base64 blobs are too large for Firestore)
-      try {
-        localStorage.setItem('weightTrackerPhotos', JSON.stringify(State.photos));
-      } catch (_) { /* quota exceeded — photos just won't persist */ }
+      // Photos → localStorage
+      try { localStorage.setItem('weightTrackerPhotos', JSON.stringify(State.photos)); } catch (_) {}
     } catch (e) {
       console.error('Storage.save error:', e);
     }

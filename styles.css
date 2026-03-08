@@ -2610,7 +2610,7 @@ form#daily-entry-form.form-locked input[type="range"] {
 }
 
 #auth-logo-img {
-  max-width: 260px;
+  max-width: 160px;
   width: 100%;
   height: auto;
 }
