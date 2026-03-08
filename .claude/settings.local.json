@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/peter/AppData/Roaming/Code/User/History/-607e496e/**)",
+      "Read(//c/Users/peter/.claude/projects/c--Users-peter-Documents-GitHub-WeightlossTracker/**)",
+      "Bash(python3:*)",
+      "Read(//tmp/**)",
+      "Read(//<!DOCTYPE html>/ && /**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\peter\\.claude\\projects\\c--Users-peter-Documents-GitHub-WeightlossTracker\\16c143f0-0731-431e-8a5f-df2baaa13c90\\tool-results"
+    ]
+  }
+}

@@ -1,89 +1,1150 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Welcome to Firebase Hosting</title>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weight Loss Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Firebase compat SDK (no build step required) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey: "AIzaSyCzyq1pidFtZfukSIxeTp99umrqH0N10KI",
+      authDomain: "weightloss-tracker-97fc4.firebaseapp.com",
+      projectId: "weightloss-tracker-97fc4",
+      storageBucket: "weightloss-tracker-97fc4.firebasestorage.app",
+      messagingSenderId: "80507705218",
+      appId: "1:80507705218:web:05cfbf1849d1759349a19b"
+    });
+  </script>
+</head>
+<body>
 
-    <!-- update the version number as needed -->
-    <script defer src="/__/firebase/12.10.0/firebase-app-compat.js"></script>
-    <!-- include only the Firebase features as you need -->
-    <script defer src="/__/firebase/12.10.0/firebase-auth-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-database-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-firestore-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-functions-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-messaging-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-storage-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-analytics-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-remote-config-compat.js"></script>
-    <script defer src="/__/firebase/12.10.0/firebase-performance-compat.js"></script>
-    <!-- 
-      initialize the SDK after all desired features are loaded, set useEmulator to false
-      to avoid connecting the SDK to running emulators.
-    -->
-    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
-
-    <style media="screen">
-      body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
-      #message { background: white; max-width: 360px; margin: 100px auto 16px; padding: 32px 24px; border-radius: 3px; }
-      #message h2 { color: #ffa100; font-weight: bold; font-size: 16px; margin: 0 0 8px; }
-      #message h1 { font-size: 22px; font-weight: 300; color: rgba(0,0,0,0.6); margin: 0 0 16px;}
-      #message p { line-height: 140%; margin: 16px 0 24px; font-size: 14px; }
-      #message a { display: block; text-align: center; background: #039be5; text-transform: uppercase; text-decoration: none; color: white; padding: 16px; border-radius: 4px; }
-      #message, #message a { box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
-      #load { color: rgba(0,0,0,0.4); text-align: center; font-size: 13px; }
-      @media (max-width: 600px) {
-        body, #message { margin-top: 0; background: white; box-shadow: none; }
-        body { border-top: 16px solid #ffa100; }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="message">
-      <h2>Welcome</h2>
-      <h1>Firebase Hosting Setup Complete</h1>
-      <p>You're seeing this because you've successfully setup Firebase Hosting. Now it's time to go build something extraordinary!</p>
-      <a target="_blank" href="https://firebase.google.com/docs/hosting/">Open Hosting Documentation</a>
+  <!-- ============================================================
+       AUTH OVERLAY — shown when user is not signed in
+       ============================================================ -->
+  <div id="auth-overlay">
+    <div id="auth-card">
+      <div id="auth-logo">
+        <span class="auth-logo-icon">&#9650;</span>
+        <span class="auth-logo-text">Weight Tracker</span>
+      </div>
+      <h1 id="auth-title">Welcome back</h1>
+      <p id="auth-subtitle">Sign in to access your personal weight loss data.</p>
+      <button id="auth-google-btn" onclick="Auth.signInWithGoogle()">
+        <svg id="auth-google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Sign in with Google
+      </button>
+      <p id="auth-privacy">Your data is private and only accessible to you.</p>
     </div>
-    <p id="load">Firebase SDK Loading&hellip;</p>
+  </div>
 
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        const loadEl = document.querySelector('#load');
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
-        // // The Firebase SDK is initialized and available here!
-        //
-        // firebase.auth().onAuthStateChanged(user => { });
-        // firebase.database().ref('/path/to/ref').on('value', snapshot => { });
-        // firebase.firestore().doc('/foo/bar').get().then(() => { });
-        // firebase.functions().httpsCallable('yourFunction')().then(() => { });
-        // firebase.messaging().requestPermission().then(() => { });
-        // firebase.storage().ref('/path/to/ref').getDownloadURL().then(() => { });
-        // firebase.analytics(); // call to activate
-        // firebase.analytics().logEvent('tutorial_completed');
-        // firebase.performance(); // call to activate
-        //
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+  <!-- ============================================================
+       WIZARD OVERLAY — shown on first launch only
+       ============================================================ -->
+  <div id="wizard-overlay" class="hidden">
+    <div id="wizard-modal">
+      <div id="wizard-header">
+        <h1>Welcome to Your Weight Loss Tracker</h1>
+        <p>Let's set up your profile before we begin. This takes about 60 seconds.</p>
+        <div id="wizard-progress">
+          <div class="wizard-step-dot active" data-step="1"></div>
+          <div class="wizard-step-dot" data-step="2"></div>
+          <div class="wizard-step-dot" data-step="3"></div>
+        </div>
+      </div>
 
-        try {
-          let app = firebase.app();
-          let features = [
-            'auth', 
-            'database', 
-            'firestore',
-            'functions',
-            'messaging', 
-            'storage', 
-            'analytics', 
-            'remoteConfig',
-            'performance',
-          ].filter(feature => typeof app[feature] === 'function');
-          loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
-        } catch (e) {
-          console.error(e);
-          loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
-        }
-      });
-    </script>
-  </body>
+      <!-- Wizard Step 1: Personal Details -->
+      <div id="wizard-step-1" class="wizard-step active">
+        <h2>Step 1 of 3 — Personal Details</h2>
+        <div class="form-group">
+          <label for="wiz-name">Your Name</label>
+          <input type="text" id="wiz-name" placeholder="e.g. Alex" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="wiz-dob">Date of Birth</label>
+          <input type="date" id="wiz-dob">
+        </div>
+        <div class="form-group">
+          <label for="wiz-height">Height (cm)</label>
+          <input type="number" id="wiz-height" placeholder="e.g. 178" min="100" max="250" step="0.1">
+        </div>
+        <div class="wizard-nav">
+          <span></span>
+          <button class="btn btn-primary" onclick="Wizard.nextStep(1)">Next &rarr;</button>
+        </div>
+        <div class="wizard-import-link">
+          <p>Already have a data export? <button class="btn-link" onclick="Wizard.importInstead()">Import it instead</button></p>
+        </div>
+      </div>
+
+      <!-- Wizard Step 2: Journey Details -->
+      <div id="wizard-step-2" class="wizard-step hidden">
+        <h2>Step 2 of 3 — Your Journey</h2>
+        <div class="form-group">
+          <label for="wiz-start-date">Journey Start Date</label>
+          <input type="date" id="wiz-start-date">
+        </div>
+        <div class="form-group">
+          <label for="wiz-starting-weight">Starting Weight (kg)</label>
+          <input type="number" id="wiz-starting-weight" placeholder="e.g. 105.0" min="30" max="400" step="0.1">
+        </div>
+        <div class="form-group">
+          <label for="wiz-goal-weight">Goal Weight (kg)</label>
+          <input type="number" id="wiz-goal-weight" placeholder="e.g. 80.0" min="30" max="400" step="0.1">
+        </div>
+        <div class="wizard-nav">
+          <button class="btn btn-secondary" onclick="Wizard.goToStep(1)">&larr; Back</button>
+          <button class="btn btn-primary" onclick="Wizard.nextStep(2)">Next &rarr;</button>
+        </div>
+      </div>
+
+      <!-- Wizard Step 3: Confirmation -->
+      <div id="wizard-step-3" class="wizard-step hidden">
+        <h2>Step 3 of 3 — Confirm Your Details</h2>
+        <div id="wizard-summary" class="wizard-summary-box"></div>
+        <div class="wizard-nav">
+          <button class="btn btn-secondary" onclick="Wizard.goToStep(2)">&larr; Back</button>
+          <button class="btn btn-accent" id="wizard-finish-btn" onclick="Wizard.handleComplete()">Start Tracking!</button>
+        </div>
+      </div>
+
+      <!-- Hidden file input for wizard import path -->
+      <input type="file" id="wizard-import-file-input" accept=".json" class="hidden">
+    </div>
+  </div>
+
+  <!-- ============================================================
+       IMPORT PROMPT OVERLAY — shown on returning visits without data
+       ============================================================ -->
+  <div id="import-prompt-overlay" class="hidden">
+    <div id="import-prompt-modal">
+      <h2>Welcome Back!</h2>
+      <p>Do you want to load data from a previously exported file?</p>
+      <div class="import-prompt-actions">
+        <button class="btn btn-primary" onclick="ImportPrompt.chooseFile()">Import Data File</button>
+        <button class="btn btn-secondary" onclick="ImportPrompt.skipImport()">Continue Without Importing</button>
+      </div>
+      <input type="file" id="import-file-input" accept=".json" class="hidden">
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MAIN APP SHELL — hidden until auth resolves
+       ============================================================ -->
+  <div id="app" class="hidden">
+
+    <!-- TOP NAVIGATION -->
+    <nav id="main-nav">
+      <div id="nav-brand">
+        <span class="nav-brand-icon">&#9650;</span>
+        Weight Tracker
+      </div>
+      <ul id="nav-links">
+        <li><button class="nav-btn active" data-page="dashboard">Summary</button></li>
+        <li><button class="nav-btn" data-page="entry">Log Entry</button></li>
+        <li><button class="nav-btn" data-page="history">History</button></li>
+        <li><button class="nav-btn" data-page="graphs">Graphs</button></li>
+        <li><button class="nav-btn" data-page="profile">Profile</button></li>
+        <li><button class="nav-btn" data-page="photos">Photos</button></li>
+        <li><button class="nav-btn hidden" data-page="coach" id="nav-coach-btn">Coach</button></li>
+      </ul>
+      <div id="nav-data-actions">
+        <button class="btn btn-sm btn-secondary" id="btn-import-nav" title="Import data from JSON file">Import</button>
+        <button class="btn btn-sm btn-accent" id="btn-export-nav" title="Export all data to JSON file">Export</button>
+        <input type="file" id="nav-import-file-input" accept=".json" class="hidden">
+      </div>
+      <div id="nav-user">
+        <img id="nav-user-avatar" src="" alt="" class="hidden">
+        <span id="nav-user-name"></span>
+        <button class="btn btn-sm btn-secondary" id="btn-sign-out" onclick="Auth.signOut()" title="Sign out">Sign out</button>
+      </div>
+      <button id="nav-hamburger" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+    </nav>
+
+    <!-- Mobile nav drawer -->
+    <div id="nav-drawer" class="hidden">
+      <button class="nav-drawer-btn" data-page="dashboard">Summary</button>
+      <button class="nav-drawer-btn" data-page="entry">Log Entry</button>
+      <button class="nav-drawer-btn" data-page="history">History</button>
+      <button class="nav-drawer-btn" data-page="graphs">Graphs</button>
+      <button class="nav-drawer-btn" data-page="profile">Profile</button>
+      <button class="nav-drawer-btn" data-page="photos">Photos</button>
+      <button class="nav-drawer-btn hidden" data-page="coach" id="nav-drawer-coach-btn">Coach</button>
+      <hr class="drawer-divider">
+      <button class="nav-drawer-btn" id="btn-import-drawer">Import Data</button>
+      <button class="nav-drawer-btn" id="btn-export-drawer">Export Data</button>
+      <hr class="drawer-divider">
+      <button class="nav-drawer-btn" id="btn-sign-out-drawer" onclick="Auth.signOut()">Sign Out</button>
+    </div>
+
+    <!-- Main content area -->
+    <main id="main-content">
+
+      <!-- ====================================================
+           PAGE: SUMMARY
+           ==================================================== -->
+      <section id="page-dashboard" class="page">
+
+        <!-- Today's target banner -->
+        <div id="today-target-banner" class="hidden">
+          <div id="target-banner-header">
+            <span id="target-day-label"></span>
+            <span id="target-travel-badge" class="hidden">&#9992; Travel Mode</span>
+          </div>
+          <div id="target-metrics-row">
+            <div class="target-metric">
+              <span class="target-metric-label">Calories</span>
+              <span class="target-metric-value" id="target-calories">—</span>
+            </div>
+            <div class="target-metric">
+              <span class="target-metric-label">Protein</span>
+              <span class="target-metric-value" id="target-protein">—</span>
+            </div>
+            <div class="target-metric">
+              <span class="target-metric-label">Fat</span>
+              <span class="target-metric-value" id="target-fat">—</span>
+            </div>
+            <div class="target-metric">
+              <span class="target-metric-label">Carbs</span>
+              <span class="target-metric-value" id="target-carbs">—</span>
+            </div>
+            <div class="target-metric">
+              <span class="target-metric-label">Steps</span>
+              <span class="target-metric-value" id="target-steps">—</span>
+            </div>
+            <div class="target-metric" id="target-training-wrap">
+              <span class="target-metric-label">Training</span>
+              <span class="target-metric-value" id="target-training">—</span>
+            </div>
+          </div>
+          <div id="target-mvd-row" class="hidden">
+            <span class="target-mvd-label">Quick presets:</span>
+            <div id="target-mvd-btns"></div>
+          </div>
+        </div>
+
+        <!-- Motivational quote banner -->
+        <div id="quote-banner">
+          <div id="quote-content">
+            <div id="quote-text"></div>
+            <div id="quote-attribution"></div>
+          </div>
+          <button id="quote-next-btn" title="Next quote">&#8250;</button>
+        </div>
+
+        <!-- Missing weigh-in alert -->
+        <div id="missing-days-alert" class="hidden">
+          <div id="missing-days-title">&#9888; Missing weigh-ins</div>
+          <div id="missing-days-list"></div>
+          <div id="data-nudges"></div>
+        </div>
+
+        <!-- Plateau alert -->
+        <div id="plateau-alert" class="hidden">
+          <div id="plateau-alert-title">&#9888; Possible plateau detected</div>
+          <div id="plateau-alert-body"></div>
+        </div>
+
+        <!-- Coach check-in panel -->
+        <div id="coach-checkin-panel" class="hidden">
+          <div id="coach-checkin-title"></div>
+          <div id="coach-stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Lost Since Last Check-in</div>
+              <div class="stat-value" id="coach-stat-kg-lost">—</div>
+              <div class="stat-unit">kg</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Days Since Check-in</div>
+              <div class="stat-value" id="coach-stat-days">—</div>
+              <div class="stat-unit">days</div>
+            </div>
+          </div>
+          <div id="coach-nsv-summary-section">
+            <div class="coach-nsv-title">Non-Scale Victories to share with your coach:</div>
+            <ul id="coach-nsv-list"></ul>
+            <div id="coach-nsv-empty" class="hidden">No NSVs recorded since last check-in.</div>
+          </div>
+        </div>
+
+        <!-- Retention flags -->
+        <div id="retention-flags" class="hidden"></div>
+
+        <!-- Summary stat cards -->
+        <div id="dashboard-summary">
+          <div class="stat-card">
+            <div class="stat-label">Current Weight</div>
+            <div class="stat-value" id="stat-current-weight">—</div>
+            <div class="stat-unit">kg</div>
+          </div>
+          <div class="stat-card accent">
+            <div class="stat-label">Total Lost</div>
+            <div class="stat-value" id="stat-total-lost">—</div>
+            <div class="stat-unit">kg</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">% Lost</div>
+            <div class="stat-value" id="stat-pct-lost">—</div>
+            <div class="stat-unit">%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">BMI</div>
+            <div class="stat-value" id="stat-bmi">—</div>
+            <div class="stat-unit" id="stat-bmi-category"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">To Goal</div>
+            <div class="stat-value" id="stat-goal-remaining">—</div>
+            <div class="stat-unit">kg</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Logging Streak</div>
+            <div class="stat-value" id="stat-streak">—</div>
+            <div class="stat-unit">days</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Steps (latest)</div>
+            <div class="stat-value" id="stat-steps">—</div>
+            <div class="stat-unit" id="stat-steps-km"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Trend Weight</div>
+            <div class="stat-value" id="stat-trend-weight">—</div>
+            <div class="stat-unit">kg (7-day avg)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">7-day Avg Loss</div>
+            <div class="stat-value" id="stat-7day-avg">—</div>
+            <div class="stat-unit">kg/week</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Today's Points</div>
+            <div class="stat-value" id="stat-today-points">—</div>
+            <div class="stat-unit">/5</div>
+          </div>
+        </div>
+
+        <!-- Progress bar section -->
+        <div id="summary-progress-section" class="hidden">
+          <div class="summary-progress-labels">
+            <span id="summary-progress-start"></span>
+            <span id="summary-progress-pct"></span>
+            <span id="summary-progress-goal"></span>
+          </div>
+          <div class="summary-progress-bar">
+            <div class="summary-progress-bar-fill" id="summary-progress-bar-fill"></div>
+          </div>
+        </div>
+
+        <!-- Goal timeline -->
+        <div id="goal-timeline-section" class="hidden">
+          <div class="goal-timeline-header">Goal Timeline</div>
+          <div class="goal-timeline-grid">
+            <div class="goal-stat">
+              <div class="goal-stat-label">Current Rate</div>
+              <div class="goal-stat-value" id="goal-timeline-rate">—</div>
+            </div>
+            <div class="goal-stat">
+              <div class="goal-stat-label">Est. Completion</div>
+              <div class="goal-stat-value" id="goal-est-date">—</div>
+            </div>
+            <div class="goal-stat">
+              <div class="goal-stat-label">Days Remaining</div>
+              <div class="goal-stat-value" id="goal-days-remaining">—</div>
+            </div>
+            <div class="goal-stat">
+              <div class="goal-stat-label">kg Remaining</div>
+              <div class="goal-stat-value" id="goal-kg-remaining">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini charts -->
+        <div id="summary-charts-grid">
+          <div class="chart-card">
+            <div class="chart-card-title">Weight Trend (30 days)</div>
+            <canvas id="chart-mini-weight"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Steps (30 days)</div>
+            <canvas id="chart-mini-steps"></canvas>
+          </div>
+        </div>
+
+        <!-- Log entry CTA -->
+        <div id="summary-log-cta" class="hidden">
+          <span id="summary-log-cta-text"></span>
+          <button class="btn btn-accent" onclick="Nav.goTo('entry')">Log Entry</button>
+        </div>
+
+      </section>
+
+      <!-- ====================================================
+           PAGE: LOG ENTRY
+           ==================================================== -->
+      <section id="page-entry" class="page hidden">
+
+        <div id="daily-entry-header">
+          <h2 id="daily-entry-title">Log Today's Entry</h2>
+          <span id="entry-mode-badge" class="badge hidden">Existing Entry</span>
+        </div>
+
+        <!-- Coach targets card (shown when coach has targets for today) -->
+        <div id="entry-coach-targets-card" class="card hidden">
+          <div class="entry-card-header-collapsible" data-target="entry-coach-targets-body">
+            <h3>Today's Targets <span class="entry-collapse-arrow">&#9660;</span></h3>
+          </div>
+          <div id="entry-coach-targets-body">
+            <div id="entry-coach-targets-grid" class="coach-targets-grid"></div>
+          </div>
+        </div>
+
+        <form id="daily-entry-form" novalidate>
+
+          <!-- Hero row: date, weight, steps, lifting day -->
+          <div class="entry-hero-row">
+            <div class="form-group">
+              <label for="entry-date">Date</label>
+              <input type="date" id="entry-date" required>
+            </div>
+            <div class="form-group">
+              <label for="entry-weight">Weight (kg) <span class="required">*</span></label>
+              <input type="number" id="entry-weight" placeholder="e.g. 95.4" min="30" max="400" step="0.1">
+            </div>
+            <div class="form-group">
+              <label for="entry-steps">Steps</label>
+              <input type="number" id="entry-steps" placeholder="e.g. 8500" min="0" max="100000" step="1">
+            </div>
+            <div class="form-group">
+              <label>Lifting Day?</label>
+              <div class="lift-btns">
+                <button type="button" class="lift-btn" data-lift="yes">Yes</button>
+                <button type="button" class="lift-btn" data-lift="no">No</button>
+              </div>
+              <input type="hidden" id="entry-lifting-day">
+            </div>
+          </div>
+
+          <!-- Auto-calculated display row -->
+          <div class="form-grid-4 computed-fields-row">
+            <div class="form-group">
+              <label>Lost (from prev)</label>
+              <div class="field-computed" id="calc-kg-from-prev">—</div>
+            </div>
+            <div class="form-group">
+              <label>Total kg Lost</label>
+              <div class="field-computed" id="calc-total-kg-lost">—</div>
+            </div>
+            <div class="form-group">
+              <label>Total % Lost</label>
+              <div class="field-computed" id="calc-pct-lost">—</div>
+            </div>
+            <div class="form-group">
+              <label>BMI</label>
+              <div class="field-computed" id="calc-bmi">—</div>
+            </div>
+          </div>
+
+          <!-- Nutrition card -->
+          <div class="entry-card card">
+            <div class="entry-card-header-collapsible" data-target="entry-nutrition-body">
+              <h3>Nutrition <span class="entry-collapse-arrow">&#9660;</span></h3>
+            </div>
+            <div id="entry-nutrition-body">
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="entry-calories">Calorie Intake (kcal)</label>
+                  <input type="number" id="entry-calories" placeholder="e.g. 1800" min="0" max="10000">
+                </div>
+                <div class="form-group">
+                  <label for="entry-sodium">Sodium (mg)</label>
+                  <input type="number" id="entry-sodium" placeholder="e.g. 2000" min="0" max="20000">
+                </div>
+              </div>
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label for="entry-protein">Protein (g)</label>
+                  <input type="number" id="entry-protein" placeholder="e.g. 150" min="0" max="1000" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label for="entry-carbs">Carbohydrates (g)</label>
+                  <input type="number" id="entry-carbs" placeholder="e.g. 200" min="0" max="2000" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label for="entry-fat">Fat (g)</label>
+                  <input type="number" id="entry-fat" placeholder="e.g. 60" min="0" max="500" step="0.1">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Measurements card -->
+          <div class="entry-card card">
+            <div class="entry-card-header-collapsible" data-target="entry-measurements-body">
+              <h3>Body Measurements <span class="entry-collapse-arrow">&#9660;</span></h3>
+            </div>
+            <div id="entry-measurements-body">
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label for="entry-waist">Waist (cm)</label>
+                  <input type="number" id="entry-waist" placeholder="e.g. 95" min="40" max="250" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label for="entry-bicep">Bicep (cm)</label>
+                  <input type="number" id="entry-bicep" placeholder="e.g. 35" min="10" max="100" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label for="entry-thigh">Thigh (cm)</label>
+                  <input type="number" id="entry-thigh" placeholder="e.g. 58" min="20" max="150" step="0.1">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Non-Scale Victories card -->
+          <div class="entry-card card">
+            <div class="entry-card-header-collapsible" data-target="entry-nsv-body">
+              <h3>Non-Scale Victories <span class="entry-collapse-arrow">&#9660;</span></h3>
+            </div>
+            <div id="entry-nsv-body">
+              <div class="form-group">
+                <label for="entry-nsv">Celebrate your wins (optional)</label>
+                <textarea id="entry-nsv" rows="3" placeholder="e.g. Walked 10,000 steps, clothes feel looser, more energy today..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wellbeing card -->
+          <div class="entry-card card">
+            <div class="entry-card-header-collapsible" data-target="entry-wellbeing-body">
+              <h3>Wellbeing <span class="entry-collapse-arrow">&#9660;</span></h3>
+            </div>
+            <div id="entry-wellbeing-body">
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="entry-sleep">Sleep (hours)</label>
+                  <input type="number" id="entry-sleep" min="0" max="24" step="0.5" placeholder="e.g. 7.5">
+                </div>
+                <div class="form-group">
+                  <label for="entry-alcohol">Alcohol (drinks)</label>
+                  <input type="number" id="entry-alcohol" min="0" max="30" step="1" placeholder="0">
+                </div>
+              </div>
+              <div class="form-grid-2">
+                <div class="form-group slider-group">
+                  <label for="entry-hunger">Hunger <span id="hunger-val">—</span>/10</label>
+                  <input type="range" id="entry-hunger" min="1" max="10" step="1" class="slider">
+                </div>
+                <div class="form-group slider-group">
+                  <label for="entry-energy">Energy <span id="energy-val">—</span>/10</label>
+                  <input type="range" id="entry-energy" min="1" max="10" step="1" class="slider">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Adherence card -->
+          <div class="entry-card card">
+            <div class="entry-card-header-collapsible" data-target="entry-adherence-body">
+              <h3>Adherence <span class="entry-collapse-arrow">&#9660;</span></h3>
+            </div>
+            <div id="entry-adherence-body">
+              <div class="adherence-btns">
+                <button type="button" class="adherence-btn" data-score="on_plan">&#10003; On Plan</button>
+                <button type="button" class="adherence-btn" data-score="close">&#126; Close</button>
+                <button type="button" class="adherence-btn" data-score="off_plan">&#10007; Off Plan</button>
+              </div>
+              <div id="adherence-why-row" class="hidden">
+                <span class="adherence-why-label">Why?</span>
+                <div class="adherence-tags">
+                  <button type="button" class="adherence-tag" data-why="stress">Stress</button>
+                  <button type="button" class="adherence-tag" data-why="sleep">Sleep</button>
+                  <button type="button" class="adherence-tag" data-why="travel">Travel</button>
+                  <button type="button" class="adherence-tag" data-why="hungry">Hungry</button>
+                  <button type="button" class="adherence-tag" data-why="social">Social</button>
+                </div>
+              </div>
+              <input type="hidden" id="entry-adherence-score">
+              <input type="hidden" id="entry-adherence-why">
+            </div>
+          </div>
+
+          <!-- Coach notes (shown on check-in days) -->
+          <div id="entry-coach-notes-wrap" class="entry-card card hidden">
+            <h3 id="entry-coach-notes-label">Coach Check-in Notes</h3>
+            <div class="form-group">
+              <label for="entry-coach-notes">Notes from today's session</label>
+              <textarea id="entry-coach-notes" rows="4" placeholder="What did your coach say? Goals set, adjustments made, encouragement received..."></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="entry-clear-btn">Clear Form</button>
+            <button type="submit" class="btn btn-accent" id="entry-submit-btn">Save Entry</button>
+            <button type="button" class="btn btn-primary hidden" id="entry-edit-btn">&#10000; Edit Entry</button>
+          </div>
+
+        </form>
+      </section>
+
+      <!-- ====================================================
+           PAGE: HISTORY
+           ==================================================== -->
+      <section id="page-history" class="page hidden">
+        <div id="history-header">
+          <h2>Entry History</h2>
+          <button class="btn btn-accent" id="history-add-btn">+ Add Entry</button>
+        </div>
+        <div id="history-controls">
+          <input type="text" id="history-search" placeholder="Search by date or NSV..." class="search-input">
+        </div>
+        <div class="table-wrapper">
+          <table id="history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Weight (kg)</th>
+                <th>Lost (kg)</th>
+                <th>Total Lost (kg)</th>
+                <th>% Lost</th>
+                <th>BMI</th>
+                <th>Calories</th>
+                <th>Protein (g)</th>
+                <th>Carbs (g)</th>
+                <th>Fat (g)</th>
+                <th>Sodium (mg)</th>
+                <th>Waist (cm)</th>
+                <th>Bicep (cm)</th>
+                <th>Thigh (cm)</th>
+                <th>Steps</th>
+                <th>Sleep (h)</th>
+                <th>Alcohol</th>
+                <th>Hunger</th>
+                <th>Energy</th>
+                <th>Adherence</th>
+                <th>NSV</th>
+                <th>Coach Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+        <div id="history-empty" class="empty-state hidden">
+          <p>No entries yet. <button class="btn-link" onclick="Nav.goTo('entry')">Log your first entry</button>.</p>
+        </div>
+      </section>
+
+      <!-- ====================================================
+           PAGE: GRAPHS
+           ==================================================== -->
+      <section id="page-graphs" class="page hidden">
+        <div id="graphs-header">
+          <h2>Graphs &amp; Progress</h2>
+          <div id="graphs-date-range">
+            <label for="graphs-range-select">Show:</label>
+            <select id="graphs-range-select">
+              <option value="all">All time</option>
+              <option value="14">Last 2 weeks</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="180">180 days</option>
+              <option value="365">1 year</option>
+              <option value="custom">Custom range&hellip;</option>
+            </select>
+          </div>
+        </div>
+        <div id="graphs-custom-range" class="hidden">
+          <input type="date" id="graphs-from-date">
+          <span class="graphs-range-sep">to</span>
+          <input type="date" id="graphs-to-date">
+          <button class="btn btn-sm btn-primary" id="graphs-apply-range">Apply</button>
+        </div>
+        <div id="charts-grid">
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-title">Weight Over Time (kg)</div>
+            <canvas id="chart-weight"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Total kg Lost</div>
+            <canvas id="chart-kg-lost"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">BMI Trend</div>
+            <canvas id="chart-bmi"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Daily Calorie Intake (kcal)</div>
+            <canvas id="chart-calories"></canvas>
+          </div>
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-title">Macronutrients Over Time (g)</div>
+            <canvas id="chart-macros"></canvas>
+          </div>
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-title">Body Measurements Over Time (cm)</div>
+            <canvas id="chart-measurements"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Daily Steps</div>
+            <canvas id="chart-steps"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Sodium Intake (mg)</div>
+            <canvas id="chart-sodium"></canvas>
+          </div>
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-title">Sodium vs Next-Day Weight</div>
+            <canvas id="chart-sodium-weight"></canvas>
+          </div>
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-title">Daily Points</div>
+            <canvas id="chart-points"></canvas>
+          </div>
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-title">Coach Check-in Trend</div>
+            <canvas id="chart-coach-checkins"></canvas>
+          </div>
+        </div>
+        <div id="graphs-empty" class="empty-state hidden">
+          <p>No data to chart yet. <button class="btn-link" onclick="Nav.goTo('entry')">Start logging entries</button> to see your progress here.</p>
+        </div>
+      </section>
+
+      <!-- ====================================================
+           PAGE: PROFILE
+           ==================================================== -->
+      <section id="page-profile" class="page hidden">
+        <h2>Profile &amp; Bio</h2>
+        <div id="profile-computed-stats">
+          <div class="stat-card">
+            <div class="stat-label">Age</div>
+            <div class="stat-value" id="profile-stat-age">—</div>
+            <div class="stat-unit">years</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Days on Journey</div>
+            <div class="stat-value" id="profile-stat-days">—</div>
+            <div class="stat-unit">days</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Starting BMI</div>
+            <div class="stat-value" id="profile-stat-start-bmi">—</div>
+            <div class="stat-unit" id="profile-stat-start-bmi-cat"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Goal BMI</div>
+            <div class="stat-value" id="profile-stat-goal-bmi">—</div>
+            <div class="stat-unit" id="profile-stat-goal-bmi-cat"></div>
+          </div>
+        </div>
+        <form id="profile-form" novalidate>
+          <!-- Personal Details -->
+          <div class="form-section">
+            <h3 class="form-section-title">Personal Details</h3>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="profile-name">Name <span class="required">*</span></label>
+                <input type="text" id="profile-name" placeholder="Your name" required>
+              </div>
+              <div class="form-group">
+                <label for="profile-dob">Date of Birth <span class="required">*</span></label>
+                <input type="date" id="profile-dob" required>
+              </div>
+              <div class="form-group">
+                <label for="profile-height">Height (cm) <span class="required">*</span></label>
+                <input type="number" id="profile-height" placeholder="e.g. 178" min="100" max="250" step="0.1" required>
+                <span class="form-hint">Used for BMI calculations across all entries</span>
+              </div>
+            </div>
+          </div>
+          <!-- Journey Details -->
+          <div class="form-section">
+            <h3 class="form-section-title">Journey Details</h3>
+            <div class="form-grid-3">
+              <div class="form-group">
+                <label for="profile-start-date">Journey Start Date <span class="required">*</span></label>
+                <input type="date" id="profile-start-date" required>
+              </div>
+              <div class="form-group">
+                <label for="profile-starting-weight">Starting Weight (kg) <span class="required">*</span></label>
+                <input type="number" id="profile-starting-weight" placeholder="e.g. 105.0" min="30" max="400" step="0.1" required>
+                <span class="form-hint">Your weight at the journey start date</span>
+              </div>
+              <div class="form-group">
+                <label for="profile-goal-weight">Goal Weight (kg) <span class="required">*</span></label>
+                <input type="number" id="profile-goal-weight" placeholder="e.g. 80.0" min="30" max="400" step="0.1" required>
+              </div>
+              <div class="form-group">
+                <label for="profile-weekly-goal-kg">Weekly Loss Target (kg/week)</label>
+                <input type="number" id="profile-weekly-goal-kg" placeholder="e.g. 0.5" min="0.1" max="2" step="0.1">
+                <span class="form-hint">Used for target pace line on weight graph</span>
+              </div>
+            </div>
+          </div>
+          <!-- Coach Section -->
+          <div class="form-section">
+            <h3 class="form-section-title">Coach (Optional)</h3>
+            <div class="coach-toggle-row">
+              <input type="checkbox" id="coach-enabled">
+              <label for="coach-enabled">I have a weight loss coach</label>
+            </div>
+            <div id="coach-fields-wrap" class="hidden">
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="coach-name">Coach's Name</label>
+                  <input type="text" id="coach-name" placeholder="e.g. Sarah">
+                </div>
+                <div class="form-group">
+                  <label for="coach-checkin-day">Check-in Day</label>
+                  <select id="coach-checkin-day">
+                    <option value="monday">Every Monday</option>
+                    <option value="tuesday">Every Tuesday</option>
+                    <option value="wednesday">Every Wednesday</option>
+                    <option value="thursday">Every Thursday</option>
+                    <option value="friday">Every Friday</option>
+                    <option value="saturday">Every Saturday</option>
+                    <option value="sunday">Every Sunday</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="coach-arrangement-notes">Arrangement Notes (optional)</label>
+                <textarea id="coach-arrangement-notes" rows="2" placeholder="e.g. Check in every Thursday via Zoom at 6pm"></textarea>
+              </div>
+            </div>
+          </div>
+          <!-- Travel Mode -->
+          <div class="form-section">
+            <h3 class="form-section-title">Travel / Disruption Mode</h3>
+            <div class="toggle-row">
+              <input type="checkbox" id="travel-mode-enabled">
+              <label for="travel-mode-enabled">I&rsquo;m travelling or disrupted this week</label>
+            </div>
+            <div id="travel-mode-fields" class="hidden">
+              <div class="form-group">
+                <label for="maintenance-calories">Maintenance Calories (kcal/day)</label>
+                <input type="number" id="maintenance-calories" min="1000" max="5000" step="50" placeholder="e.g. 2200">
+              </div>
+            </div>
+          </div>
+          <!-- Minimum Viable Day Presets -->
+          <div class="form-section">
+            <h3 class="form-section-title">Minimum Viable Day Presets</h3>
+            <p class="form-hint">Save up to 3 quick presets for low-effort days. Accessible from the dashboard target banner.</p>
+            <div id="mvd-presets-list"></div>
+            <button type="button" id="mvd-save-btn" class="btn btn-secondary">Save Presets</button>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-accent">Save Profile</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ====================================================
+           PAGE: PHOTOS
+           ==================================================== -->
+      <section id="page-photos" class="page hidden">
+        <h2>Progress Photos</h2>
+
+        <!-- Upload card -->
+        <div class="card" id="photos-upload-card">
+          <h3>New Photo Session</h3>
+          <div class="form-grid-2" style="margin-bottom: var(--space-md);">
+            <div class="form-group">
+              <label for="photo-upload-date">Session Date</label>
+              <input type="date" id="photo-upload-date">
+            </div>
+            <div class="form-group">
+              <label for="photo-session-notes">Notes (optional)</label>
+              <input type="text" id="photo-session-notes" placeholder="e.g. Week 4">
+            </div>
+          </div>
+          <div class="photo-slot-grid">
+            <div class="photo-slot">
+              <div class="photo-slot-angle">Front</div>
+              <img id="photo-preview-front" class="photo-slot-preview empty" src="" alt="">
+              <label for="photo-front-input" class="btn btn-sm btn-secondary">Choose</label>
+              <input type="file" id="photo-front-input" accept="image/*" class="hidden">
+            </div>
+            <div class="photo-slot">
+              <div class="photo-slot-angle">Side</div>
+              <img id="photo-preview-side" class="photo-slot-preview empty" src="" alt="">
+              <label for="photo-side-input" class="btn btn-sm btn-secondary">Choose</label>
+              <input type="file" id="photo-side-input" accept="image/*" class="hidden">
+            </div>
+            <div class="photo-slot">
+              <div class="photo-slot-angle">Back</div>
+              <img id="photo-preview-back" class="photo-slot-preview empty" src="" alt="">
+              <label for="photo-back-input" class="btn btn-sm btn-secondary">Choose</label>
+              <input type="file" id="photo-back-input" accept="image/*" class="hidden">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-accent" id="photo-upload-btn">Save Session</button>
+          </div>
+        </div>
+
+        <!-- Comparison card -->
+        <div class="card" id="photos-comparison-card">
+          <h3>Side-by-Side Comparison</h3>
+          <div class="comparison-controls">
+            <div class="form-group">
+              <label for="compare-photo-a">Session A (Before)</label>
+              <select id="compare-photo-a">
+                <option value="">— Select a session —</option>
+              </select>
+            </div>
+            <div class="comparison-vs">VS</div>
+            <div class="form-group">
+              <label for="compare-photo-b">Session B (After)</label>
+              <select id="compare-photo-b">
+                <option value="">— Select a session —</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" id="compare-btn">Compare</button>
+          </div>
+          <div id="comparison-view" class="hidden">
+            <div class="comparison-angle-label">Front</div>
+            <div class="comparison-image-wrap">
+              <div class="comparison-label" id="compare-label-a"></div>
+              <img id="compare-front-a" src="" alt="Front A">
+            </div>
+            <div class="comparison-image-wrap">
+              <div class="comparison-label" id="compare-label-b"></div>
+              <img id="compare-front-b" src="" alt="Front B">
+            </div>
+            <div class="comparison-angle-label">Side</div>
+            <div class="comparison-image-wrap">
+              <img id="compare-side-a" src="" alt="Side A">
+            </div>
+            <div class="comparison-image-wrap">
+              <img id="compare-side-b" src="" alt="Side B">
+            </div>
+            <div class="comparison-angle-label">Back</div>
+            <div class="comparison-image-wrap">
+              <img id="compare-back-a" src="" alt="Back A">
+            </div>
+            <div class="comparison-image-wrap">
+              <img id="compare-back-b" src="" alt="Back B">
+            </div>
+          </div>
+        </div>
+
+        <!-- Gallery -->
+        <div id="photos-gallery-section">
+          <h3>Gallery</h3>
+          <div id="photos-gallery"></div>
+          <div id="photos-empty" class="empty-state hidden">
+            <p>No photos yet. Upload your first progress photo above!</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================
+           PAGE: COACH
+           ==================================================== -->
+      <section id="page-coach" class="page hidden">
+        <h2>Coach Check-ins</h2>
+        <p class="page-subtitle" id="coach-page-subtitle"></p>
+
+        <!-- Questions for next check-in -->
+        <div class="card" id="coach-questions-card">
+          <div class="coach-questions-header">
+            <h3>Questions for my next check-in</h3>
+            <span id="coach-next-checkin-date" class="coach-next-badge"></span>
+          </div>
+          <div class="form-group">
+            <textarea id="coach-questions-textarea" rows="5"
+              placeholder="Add questions or topics you want to discuss with your coach at your next session..."></textarea>
+          </div>
+          <button id="coach-questions-save-btn" class="btn btn-accent">Save Questions</button>
+        </div>
+
+        <!-- Weekly target plan -->
+        <div class="card" id="weekly-plan-card">
+          <h3>Weekly Targets</h3>
+          <p class="form-hint">Set daily targets. Today&rsquo;s targets appear as a banner on your dashboard.</p>
+          <div class="weekly-plan-table-wrap">
+            <table class="weekly-plan-table">
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>Calories</th>
+                  <th>Protein (g)</th>
+                  <th>Fat (g)</th>
+                  <th>Carbs (g)</th>
+                  <th>Steps</th>
+                  <th>Training</th>
+                </tr>
+              </thead>
+              <tbody id="weekly-plan-tbody"></tbody>
+            </table>
+          </div>
+          <button id="weekly-plan-save-btn" class="btn btn-accent">Save Weekly Plan</button>
+        </div>
+
+        <!-- Check-in history -->
+        <div class="card">
+          <h3>Check-in History</h3>
+          <p id="coach-history-empty" class="empty-state hidden">
+            No check-in dates found yet. History will appear here after your first coaching check-in day passes.
+          </p>
+          <div id="coach-history-list"></div>
+        </div>
+      </section>
+
+    </main>
+  </div><!-- /#app -->
+
+  <!-- ============================================================
+       EDIT ENTRY MODAL
+       ============================================================ -->
+  <div id="edit-modal-overlay" class="hidden">
+    <div id="edit-modal">
+      <div id="edit-modal-header">
+        <h3 id="edit-modal-title">Edit Entry</h3>
+        <button class="modal-close-btn" id="edit-modal-close">&times;</button>
+      </div>
+      <form id="edit-entry-form" novalidate>
+        <input type="hidden" id="edit-entry-id">
+        <div class="form-section">
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="edit-date">Date</label>
+              <input type="date" id="edit-date" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-weight">Weight (kg) <span class="required">*</span></label>
+              <input type="number" id="edit-weight" min="30" max="400" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-steps">Steps</label>
+              <input type="number" id="edit-steps" min="0" max="100000" step="1">
+            </div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="edit-calories">Calories (kcal)</label>
+              <input type="number" id="edit-calories" min="0" max="10000">
+            </div>
+            <div class="form-group">
+              <label for="edit-sodium">Sodium (mg)</label>
+              <input type="number" id="edit-sodium" min="0" max="20000">
+            </div>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="edit-protein">Protein (g)</label>
+              <input type="number" id="edit-protein" min="0" max="1000" step="0.1">
+            </div>
+            <div class="form-group">
+              <label for="edit-carbs">Carbs (g)</label>
+              <input type="number" id="edit-carbs" min="0" max="2000" step="0.1">
+            </div>
+            <div class="form-group">
+              <label for="edit-fat">Fat (g)</label>
+              <input type="number" id="edit-fat" min="0" max="500" step="0.1">
+            </div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="edit-waist">Waist (cm)</label>
+              <input type="number" id="edit-waist" min="40" max="250" step="0.1">
+            </div>
+            <div class="form-group">
+              <label for="edit-bicep">Bicep (cm)</label>
+              <input type="number" id="edit-bicep" min="10" max="100" step="0.1">
+            </div>
+            <div class="form-group">
+              <label for="edit-thigh">Thigh (cm)</label>
+              <input type="number" id="edit-thigh" min="20" max="150" step="0.1">
+            </div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-group">
+            <label for="edit-nsv">Non-Scale Victories</label>
+            <textarea id="edit-nsv" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="form-section">
+          <h3 class="form-section-title">Wellbeing</h3>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="edit-sleep">Sleep (hours)</label>
+              <input type="number" id="edit-sleep" min="0" max="24" step="0.5" placeholder="e.g. 7.5">
+            </div>
+            <div class="form-group">
+              <label for="edit-alcohol">Alcohol (drinks)</label>
+              <input type="number" id="edit-alcohol" min="0" max="30" step="1" placeholder="0">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group slider-group">
+              <label for="edit-hunger">Hunger <span id="edit-hunger-val">—</span>/10</label>
+              <input type="range" id="edit-hunger" min="1" max="10" step="1" class="slider">
+            </div>
+            <div class="form-group slider-group">
+              <label for="edit-energy">Energy <span id="edit-energy-val">—</span>/10</label>
+              <input type="range" id="edit-energy" min="1" max="10" step="1" class="slider">
+            </div>
+          </div>
+        </div>
+        <div class="form-section">
+          <h3 class="form-section-title">Adherence</h3>
+          <div class="adherence-btns" id="edit-adherence-btns">
+            <button type="button" class="adherence-btn" data-score="on_plan">&#10003; On Plan</button>
+            <button type="button" class="adherence-btn" data-score="close">&#126; Close</button>
+            <button type="button" class="adherence-btn" data-score="off_plan">&#10007; Off Plan</button>
+          </div>
+          <div id="edit-adherence-why-row" class="hidden">
+            <span class="adherence-why-label">Why?</span>
+            <div class="adherence-tags" id="edit-adherence-tags">
+              <button type="button" class="adherence-tag" data-why="stress">Stress</button>
+              <button type="button" class="adherence-tag" data-why="sleep">Sleep</button>
+              <button type="button" class="adherence-tag" data-why="travel">Travel</button>
+              <button type="button" class="adherence-tag" data-why="hungry">Hungry</button>
+              <button type="button" class="adherence-tag" data-why="social">Social</button>
+            </div>
+          </div>
+          <input type="hidden" id="edit-adherence-score">
+          <input type="hidden" id="edit-adherence-why">
+        </div>
+        <div class="form-section" id="edit-coach-notes-section">
+          <div class="form-group">
+            <label for="edit-coach-notes">Coach Notes</label>
+            <textarea id="edit-coach-notes" rows="3" placeholder="Notes from coach session on this date..."></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-danger" id="edit-delete-btn">Delete Entry</button>
+          <button type="submit" class="btn btn-accent">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container"></div>
+
+  <!-- Chart.js v4 from CDN (UMD build for direct browser use without bundler) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Main application — single file, no ES modules -->
+  <script src="app.js"></script>
+</body>
 </html>
