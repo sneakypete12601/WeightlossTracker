@@ -39,6 +39,7 @@ const State = {
     heightCm: 0,
     startingWeightKg: 0,
     goalWeightKg: 0,
+    weeklyGoalKg: null,   // target kg to lose per week (null = not set)
     journeyStartDate: '', // ISO date string YYYY-MM-DD
     coach: {              // Optional coach section
       enabled: false,
@@ -73,15 +74,25 @@ const State = {
    STORAGE — localStorage read/write + JSON file I/O
    ============================================================ */
 const Storage = {
-  /** Load state from localStorage into State. Returns false if nothing found. */
-  load() {
+  /** Firestore document reference for current user's data. */
+  _docRef() {
+    const uid = firebase.auth().currentUser.uid;
+    return firebase.firestore().doc(`users/${uid}/data`);
+  },
+
+  /** Load state from Firestore into State. Returns false if nothing found. */
+  async load() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return false;
-      const saved = JSON.parse(raw);
+      const snap = await Storage._docRef().get();
+      if (!snap.exists) return false;
+      const saved = snap.data();
       if (saved.profile)  State.profile  = saved.profile;
       if (saved.entries)  State.entries  = saved.entries;
-      if (saved.photos)   State.photos   = saved.photos;
+      // Photos come from localStorage (too large for Firestore)
+      try {
+        const rawPhotos = localStorage.getItem('weightTrackerPhotos');
+        if (rawPhotos) State.photos = JSON.parse(rawPhotos);
+      } catch (_) { State.photos = []; }
       // Ensure coach object exists (migration for data saved before coach feature)
       if (!State.profile.coach) {
         State.profile.coach = { enabled: false, name: '', checkInDay: 'thursday', arrangementNotes: '', questionsForCoach: '' };
@@ -91,17 +102,25 @@ const Storage = {
       }
       if (!State.profile.coach.weeklyPlan) {
         State.profile.coach.weeklyPlan = {
-          monday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          tuesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          wednesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          thursday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          friday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          saturday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          sunday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''}
+          monday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          tuesday:   {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          wednesday: {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          thursday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          friday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          saturday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          sunday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''}
         };
+      } else {
+        // Migrate existing days to add fatTarget/carbsTarget if missing
+        Object.keys(State.profile.coach.weeklyPlan).forEach(day => {
+          const d = State.profile.coach.weeklyPlan[day];
+          if (d.fatTarget   === undefined) d.fatTarget   = null;
+          if (d.carbsTarget === undefined) d.carbsTarget = null;
+        });
       }
       if (State.profile.travelMode === undefined) State.profile.travelMode = false;
       if (State.profile.maintenanceCalories === undefined) State.profile.maintenanceCalories = null;
+      if (State.profile.weeklyGoalKg === undefined) State.profile.weeklyGoalKg = null;
       if (!State.profile.mvdPresets) {
         State.profile.mvdPresets = [
           {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
@@ -136,14 +155,21 @@ const Storage = {
     });
   },
 
-  /** Persist current State to localStorage. */
+  /** Persist current State to Firestore (fire-and-forget).
+   *  Photos are stored in localStorage only (Firestore 1 MB doc limit). */
   save() {
     try {
-      const data = { profile: State.profile, entries: State.entries, photos: State.photos };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      // Profile + entries → Firestore (cloud sync)
+      const data = { profile: State.profile, entries: State.entries };
+      Storage._docRef().set(data).catch(e => {
+        UI.showToast('Warning: Could not save to cloud. Check your connection.', 'warning');
+        console.error('Storage.save error:', e);
+      });
+      // Photos → localStorage (base64 blobs are too large for Firestore)
+      try {
+        localStorage.setItem('weightTrackerPhotos', JSON.stringify(State.photos));
+      } catch (_) { /* quota exceeded — photos just won't persist */ }
     } catch (e) {
-      // Likely quota exceeded (large photos)
-      UI.showToast('Warning: Could not save to local storage. Try exporting your data.', 'warning');
       console.error('Storage.save error:', e);
     }
   },
@@ -202,17 +228,24 @@ const Storage = {
         }
         if (!State.profile.coach.weeklyPlan) {
           State.profile.coach.weeklyPlan = {
-            monday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-            tuesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-            wednesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-            thursday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-            friday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-            saturday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-            sunday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''}
+            monday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+            tuesday:   {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+            wednesday: {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+            thursday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+            friday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+            saturday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+            sunday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''}
           };
+        } else {
+          Object.keys(State.profile.coach.weeklyPlan).forEach(day => {
+            const d = State.profile.coach.weeklyPlan[day];
+            if (d.fatTarget   === undefined) d.fatTarget   = null;
+            if (d.carbsTarget === undefined) d.carbsTarget = null;
+          });
         }
         if (State.profile.travelMode === undefined) State.profile.travelMode = false;
         if (State.profile.maintenanceCalories === undefined) State.profile.maintenanceCalories = null;
+        if (State.profile.weeklyGoalKg === undefined) State.profile.weeklyGoalKg = null;
         if (!State.profile.mvdPresets) {
           State.profile.mvdPresets = [
             {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
@@ -235,15 +268,13 @@ const Storage = {
     reader.readAsText(file);
   },
 
-  /** True if user has never completed the setup wizard. */
+  /** True if user has never completed the setup wizard (no name = not set up). */
   isFirstLaunch() {
-    return !localStorage.getItem(WIZARD_KEY);
+    return !State.profile.name;
   },
 
-  /** Persist the flag that the wizard has been completed. */
-  markWizardDone() {
-    localStorage.setItem(WIZARD_KEY, '1');
-  }
+  /** No-op: wizard completion is implicit once the profile has a name in Firestore. */
+  markWizardDone() {}
 };
 
 /* ============================================================
@@ -349,6 +380,19 @@ const Computed = {
     const trendValues = Computed.calcTrendWeights(sorted);
     const trendWeight = [...trendValues].reverse().find(v => v !== null) ?? null;
 
+    // 7-day average weight loss (kg per week based on last 7 entries)
+    let sevenDayAvgLoss = null;
+    const last7 = sorted.slice(-7);
+    if (last7.length >= 2) {
+      const days = UI.dateDiffDays(last7[0].date, last7[last7.length - 1].date);
+      const kgLost = last7[0].weightKg - last7[last7.length - 1].weightKg;
+      sevenDayAvgLoss = days > 0 ? parseFloat((kgLost / days * 7).toFixed(2)) : null;
+    }
+
+    // Points for today's entry
+    const todayEntry = sorted.find(e => e.date === UI.todayISO());
+    const todayPoints = todayEntry ? Computed.calcPoints(todayEntry) : null;
+
     return {
       currentWeight:  latest.weightKg,
       totalKgLost:    latest.totalKgLost,
@@ -359,7 +403,9 @@ const Computed = {
       streak,
       latestSteps,
       latestStepsKm,
-      trendWeight
+      trendWeight,
+      sevenDayAvgLoss,
+      todayPoints
     };
   },
 
@@ -396,6 +442,74 @@ const Computed = {
     const range = Math.max(...recent) - Math.min(...recent);
     if (range < 0.3) return { rangeKg: range.toFixed(2) };
     return null;
+  },
+
+  /**
+   * Calculate daily points score for a single entry (max 5 pts).
+   * Points: calories under target, protein on/over target, sodium < 2300, steps on/over target, lifting day.
+   */
+  calcPoints(entry) {
+    if (!entry || !entry.weightKg) return 0;
+    let points = 0;
+
+    // Get coach targets for this entry's day of week
+    let plan = null;
+    if (Coach.isEnabled()) {
+      const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+      const [y, m, d] = entry.date.split('-').map(Number);
+      plan = State.profile.coach?.weeklyPlan?.[days[new Date(y, m - 1, d).getDay()]];
+    }
+
+    // 1. Calories under target
+    if (entry.caloriesKcal !== null && plan?.caloriesTarget) {
+      if (entry.caloriesKcal <= plan.caloriesTarget) points++;
+    }
+    // 2. Protein at or above target
+    if (entry.proteinG !== null && plan?.proteinTarget) {
+      if (entry.proteinG >= plan.proteinTarget) points++;
+    }
+    // 3. Sodium under 2300 mg
+    if (entry.sodiumMg !== null && entry.sodiumMg < 2300) points++;
+    // 4. Steps at or above target
+    if (entry.stepsCount !== null && plan?.stepsTarget) {
+      if (entry.stepsCount >= plan.stepsTarget) points++;
+    }
+    // 5. Lifting day completed
+    if (entry.liftingDay === true) points++;
+
+    return points;
+  },
+
+  /**
+   * Returns goal timeline data: estimated completion date, days remaining, kg remaining.
+   */
+  goalTimeline() {
+    const sorted = Entries.getSorted();
+    if (sorted.length === 0) return null;
+    const goalW = State.profile.goalWeightKg;
+    if (!goalW) return null;
+
+    const latest = sorted[sorted.length - 1];
+    const kgRemaining = parseFloat((latest.weightKg - goalW).toFixed(2));
+    if (kgRemaining <= 0) return { reached: true, kgRemaining };
+
+    // Weekly rate: prefer user-set goal, fall back to actual trend
+    let weeklyRate = State.profile.weeklyGoalKg || null;
+    let actualWeeklyRate = null;
+    const recentEntries = sorted.slice(-28);
+    if (recentEntries.length >= 2) {
+      const days = UI.dateDiffDays(recentEntries[0].date, recentEntries[recentEntries.length - 1].date);
+      const kgLost = recentEntries[0].weightKg - recentEntries[recentEntries.length - 1].weightKg;
+      if (days > 0) actualWeeklyRate = parseFloat((kgLost / days * 7).toFixed(2));
+    }
+    if (!weeklyRate) weeklyRate = actualWeeklyRate;
+    if (!weeklyRate || weeklyRate <= 0) return { kgRemaining, noRate: true };
+
+    const daysToGoal = Math.round((kgRemaining / weeklyRate) * 7);
+    const [ty, tm, td] = UI.todayISO().split('-').map(Number);
+    const goalDate = new Date(ty, tm - 1, td + daysToGoal);
+    const estimatedDate = `${goalDate.getFullYear()}-${String(goalDate.getMonth()+1).padStart(2,'0')}-${String(goalDate.getDate()).padStart(2,'0')}`;
+    return { kgRemaining, daysToGoal, estimatedDate, weeklyRate, actualWeeklyRate };
   },
 
   /**
@@ -638,6 +752,7 @@ const Entries = {
                        ? parseInt(data.energyLevel) : null,
       adherenceScore: data.adherenceScore || null,
       adherenceWhy:   data.adherenceWhy   || null,
+      liftingDay:     data.liftingDay === true ? true : (data.liftingDay === false ? false : null),
       // Computed fields — filled by Computed.recalculateAll()
       kgLostFromPrev: 0,
       totalKgLost:    0,
@@ -860,6 +975,7 @@ const Nav = {
   /** Map page name → render function */
   _pageRenderers: {
     dashboard: () => Dashboard.render(),
+    entry:     () => Entry.render(),
     history:   () => History.render(),
     graphs:    () => Charts.render(),
     profile:   () => Profile.render(),
@@ -1040,13 +1156,13 @@ const Wizard = {
       coach: {
         enabled: false, name: '', checkInDay: 'thursday', arrangementNotes: '', questionsForCoach: '',
         weeklyPlan: {
-          monday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          tuesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          wednesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          thursday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          friday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          saturday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          sunday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''}
+          monday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          tuesday:   {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          wednesday: {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          thursday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          friday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          saturday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          sunday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''}
         }
       },
       travelMode: false,
@@ -1119,7 +1235,7 @@ const ImportPrompt = {
 };
 
 /* ============================================================
-   DASHBOARD — summary cards + daily entry form
+   DASHBOARD — summary page (stats, mini charts, progress bar)
    ============================================================ */
 const Dashboard = {
   render() {
@@ -1130,7 +1246,10 @@ const Dashboard = {
     Dashboard._checkPlateau();
     Coach.renderCheckInPanel(today);
     Dashboard._updateSummaryCards();
-    Dashboard._initForm();
+    Dashboard._renderProgressBar();
+    Dashboard._renderGoalTimeline();
+    Dashboard._renderMiniCharts();
+    Dashboard._renderLogCTA();
   },
 
   /** Check for days since journey start that have no weigh-in and display alert. */
@@ -1178,9 +1297,16 @@ const Dashboard = {
         badge.textContent = UI.formatDate(date);
         badge.title = `Click to log entry for ${UI.formatDate(date)}`;
         badge.addEventListener('click', () => {
-          document.getElementById('entry-date').value = date;
-          document.getElementById('entry-date').dispatchEvent(new Event('change'));
-          document.getElementById('daily-entry-container').scrollIntoView({ behavior: 'smooth' });
+          // Navigate to entry page with that date pre-filled
+          Nav.goTo('entry');
+          setTimeout(() => {
+            const dateEl = document.getElementById('entry-date');
+            if (dateEl) {
+              dateEl.value = date;
+              dateEl.dispatchEvent(new Event('change'));
+              document.getElementById('page-entry')?.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, 50);
         });
         list.appendChild(badge);
       });
@@ -1218,7 +1344,7 @@ const Dashboard = {
     const banner = document.getElementById('today-target-banner');
     if (!banner) return;
 
-    const hasPlan = plan && (plan.caloriesTarget || plan.proteinTarget || plan.stepsTarget || plan.training);
+    const hasPlan = plan && (plan.caloriesTarget || plan.proteinTarget || plan.fatTarget || plan.carbsTarget || plan.stepsTarget || plan.training);
     if (!hasPlan && !travelMode) { banner.classList.add('hidden'); return; }
     banner.classList.remove('hidden');
 
@@ -1226,6 +1352,8 @@ const Dashboard = {
 
     const calories = travelMode ? (p.maintenanceCalories || '—') : (plan?.caloriesTarget || '—');
     const protein  = travelMode ? '—' : (plan?.proteinTarget || '—');
+    const fat      = travelMode ? '—' : (plan?.fatTarget || '—');
+    const carbs    = travelMode ? '—' : (plan?.carbsTarget || '—');
     const steps    = travelMode ? '—' : (plan?.stepsTarget || '—');
     const training = travelMode ? 'Maintenance mode' : (plan?.training || '—');
 
@@ -1234,6 +1362,8 @@ const Dashboard = {
     document.getElementById('target-travel-badge').classList.toggle('hidden', !travelMode);
     set('target-calories', calories !== '—' ? Number(calories).toLocaleString() + ' kcal' : '—');
     set('target-protein',  protein  !== '—' ? protein + 'g' : '—');
+    set('target-fat',      fat      !== '—' ? fat      + 'g' : '—');
+    set('target-carbs',    carbs    !== '—' ? carbs    + 'g' : '—');
     set('target-steps',    steps    !== '—' ? Number(steps).toLocaleString() : '—');
     set('target-training', training);
 
@@ -1274,6 +1404,39 @@ const Dashboard = {
     const sorted = Entries.getSorted();
     const plateau = Computed.detectPlateau(sorted);
     alert.classList.toggle('hidden', !plateau);
+    if (plateau) {
+      const body = document.getElementById('plateau-alert-body');
+      if (body) {
+        body.innerHTML = `Your 7-day trend weight has not decreased meaningfully in 14 days (range: ${plateau.rangeKg} kg).<br>
+          <strong>Suggestions:</strong>
+          <ul class="plateau-suggestions">
+            <li>Reduce calories by 150 kcal/day</li>
+            <li>Add 3,000 steps to your daily target</li>
+            <li>Ensure protein is at or above your target</li>
+            <li>Discuss a diet break or refeed with your coach</li>
+          </ul>`;
+      }
+    }
+  },
+
+  _renderGoalTimeline() {
+    const section = document.getElementById('goal-timeline-section');
+    if (!section) return;
+    const timeline = Computed.goalTimeline();
+    if (!timeline || timeline.noRate) { section.classList.add('hidden'); return; }
+    section.classList.remove('hidden');
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    if (timeline.reached) {
+      set('goal-timeline-rate', 'Goal reached!');
+      set('goal-est-date', 'Achieved!');
+      set('goal-days-remaining', '0');
+      set('goal-kg-remaining', '0');
+      return;
+    }
+    set('goal-timeline-rate', `At ${UI.formatNum(timeline.weeklyRate, 2)} kg/week`);
+    set('goal-est-date', UI.formatDate(timeline.estimatedDate));
+    set('goal-days-remaining', timeline.daysToGoal.toLocaleString());
+    set('goal-kg-remaining', UI.formatNum(timeline.kgRemaining, 1));
   },
 
   _renderRetentionFlags() {
@@ -1308,6 +1471,8 @@ const Dashboard = {
       set('stat-streak', '—');
       set('stat-steps', '—');
       set('stat-steps-km', '');
+      set('stat-7day-avg', '—');
+      set('stat-today-points', '—');
       return;
     }
 
@@ -1327,309 +1492,140 @@ const Dashboard = {
       stats.latestStepsKm !== null ? `≈ ${stats.latestStepsKm} km` : '');
     set('stat-trend-weight',
       stats.trendWeight !== null ? UI.formatNum(stats.trendWeight, 1) : '—');
+    set('stat-7day-avg',
+      stats.sevenDayAvgLoss !== null ? UI.formatNum(stats.sevenDayAvgLoss, 2) : '—');
+    set('stat-today-points',
+      stats.todayPoints !== null ? `${stats.todayPoints} / 5` : '—');
 
-    // Water retention flags
     Dashboard._renderRetentionFlags();
   },
 
-  _initForm() {
+  _renderProgressBar() {
+    const section = document.getElementById('summary-progress-section');
+    if (!section) return;
+    const startW = State.profile.startingWeightKg;
+    const goalW  = State.profile.goalWeightKg;
+    const sorted = Entries.getSorted();
+    if (!startW || !goalW || sorted.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    const currentW = sorted[sorted.length - 1].weightKg;
+    const totalToLose = startW - goalW;
+    const lostSoFar  = startW - currentW;
+    const pct = totalToLose > 0
+      ? Math.min(100, Math.max(0, (lostSoFar / totalToLose) * 100))
+      : 0;
+
+    section.classList.remove('hidden');
+    const fill = document.getElementById('summary-progress-bar-fill');
+    const pctEl = document.getElementById('summary-progress-pct');
+    const startEl = document.getElementById('summary-progress-start');
+    const goalEl  = document.getElementById('summary-progress-goal');
+    if (fill)  fill.style.width = pct.toFixed(1) + '%';
+    if (pctEl) pctEl.textContent = pct.toFixed(1) + '% complete';
+    if (startEl) startEl.textContent = `Start: ${startW} kg`;
+    if (goalEl)  goalEl.textContent  = `Goal: ${goalW} kg`;
+  },
+
+  _renderMiniCharts() {
+    // Destroy existing mini charts
+    ['miniWeight', 'miniSteps'].forEach(k => {
+      if (State.charts[k]) { State.charts[k].destroy(); State.charts[k] = null; }
+    });
+
+    const allEntries = Entries.getSorted();
+    const last30 = allEntries.filter(e => UI.dateDiffDays(e.date, UI.todayISO()) <= 30);
+
+    // Mini weight chart
+    const weightCanvas = document.getElementById('chart-mini-weight');
+    if (weightCanvas && last30.length > 0) {
+      const labels = last30.map(e => UI.formatDate(e.date));
+      const trendVals = Computed.calcTrendWeights(last30);
+      State.charts.miniWeight = new Chart(weightCanvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Weight (kg)',
+              data: last30.map(e => e.weightKg),
+              borderColor: '#60a5fa',
+              backgroundColor: 'rgba(96,165,250,0.08)',
+              borderWidth: 2,
+              pointRadius: 2,
+              tension: 0.3,
+              fill: true,
+              spanGaps: false
+            },
+            {
+              label: '7-day trend',
+              data: trendVals,
+              borderColor: '#a78bfa',
+              borderWidth: 1.5,
+              borderDash: [5, 3],
+              pointRadius: 0,
+              fill: false,
+              spanGaps: true,
+              tension: 0.3
+            }
+          ]
+        },
+        options: Charts._miniConfig('kg')
+      });
+    }
+
+    // Mini steps chart
+    const stepsCanvas = document.getElementById('chart-mini-steps');
+    if (stepsCanvas && last30.length > 0) {
+      const stepsData = last30.map(e => e.stepsCount !== null && e.stepsCount !== undefined ? e.stepsCount : null);
+      const labels = last30.map(e => UI.formatDate(e.date));
+      const trendLine = Charts._calcLinearRegression(stepsData);
+      State.charts.miniSteps = new Chart(stepsCanvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Steps',
+              data: stepsData,
+              backgroundColor: 'rgba(74,222,128,0.5)',
+              borderColor: '#4ade80',
+              borderWidth: 1,
+              borderRadius: 3
+            },
+            {
+              label: 'Trend',
+              data: trendLine,
+              type: 'line',
+              borderColor: '#fbbf24',
+              borderWidth: 2,
+              borderDash: [5, 3],
+              pointRadius: 0,
+              fill: false,
+              spanGaps: true,
+              tension: 0
+            }
+          ]
+        },
+        options: Charts._miniConfig('steps')
+      });
+    }
+  },
+
+  _renderLogCTA() {
+    const cta = document.getElementById('summary-log-cta');
+    const txt = document.getElementById('summary-log-cta-text');
+    if (!cta || !txt) return;
     const today = UI.todayISO();
-    const dateInput   = document.getElementById('entry-date');
-    const weightInput = document.getElementById('entry-weight');
-
-    // Default date to today
-    if (!dateInput.value) dateInput.value = today;
-
-    // If an entry for today already exists, pre-fill the form
     const existing = Entries.getById(today);
     if (existing) {
-      Dashboard._fillForm(existing);
-      document.getElementById('daily-entry-mode-badge').classList.remove('hidden');
-      document.getElementById('entry-submit-btn').textContent = 'Update Entry';
+      txt.textContent = "Today's entry is logged.";
+      cta.classList.remove('hidden');
     } else {
-      Dashboard._clearComputedDisplay();
-      document.getElementById('daily-entry-mode-badge').classList.add('hidden');
-      document.getElementById('entry-submit-btn').textContent = 'Save Entry';
+      txt.textContent = "You haven't logged today yet.";
+      cta.classList.remove('hidden');
     }
-
-    // Live-update computed fields when weight or date changes
-    const liveUpdate = () => {
-      const date = dateInput.value;
-      const weight = parseFloat(weightInput.value);
-      if (date && !isNaN(weight)) {
-        const computed = Computed.forLiveEntry(date, weight);
-        Dashboard._displayComputed(computed);
-      } else {
-        Dashboard._clearComputedDisplay();
-      }
-    };
-
-    // Re-bind listeners (remove old ones by cloning)
-    const newWeight = weightInput.cloneNode(true);
-    weightInput.parentNode.replaceChild(newWeight, weightInput);
-    newWeight.addEventListener('input', liveUpdate);
-    newWeight.addEventListener('change', liveUpdate);
-
-    const newDate = dateInput.cloneNode(true);
-    dateInput.parentNode.replaceChild(newDate, dateInput);
-    newDate.addEventListener('change', () => {
-      const selectedDate = newDate.value;
-      // Check if the new date has an existing entry
-      const ex = Entries.getById(selectedDate);
-      if (ex) {
-        Dashboard._fillForm(ex);
-        document.getElementById('daily-entry-mode-badge').classList.remove('hidden');
-        document.getElementById('entry-submit-btn').textContent = 'Update Entry';
-      } else {
-        document.getElementById('daily-entry-mode-badge').classList.add('hidden');
-        document.getElementById('entry-submit-btn').textContent = 'Save Entry';
-        // Clear coach notes when switching to a different date
-        document.getElementById('entry-coach-notes').value = '';
-        // Reset adherence + sliders
-        Dashboard._resetWellbeing();
-      }
-      // Update coach panel for the selected date
-      Coach.renderCheckInPanel(selectedDate);
-      liveUpdate();
-    });
-
-    // Form submit
-    const form = document.getElementById('daily-entry-form');
-    const newForm = form.cloneNode(true);
-    form.parentNode.replaceChild(newForm, form);
-    // Re-query after clone
-    const newFormEl = document.getElementById('daily-entry-form');
-    newFormEl.addEventListener('submit', Dashboard.handleSubmit);
-
-    // Slider live-value display
-    const hungerSlider = document.getElementById('entry-hunger');
-    const energySlider = document.getElementById('entry-energy');
-    const hungerVal    = document.getElementById('hunger-val');
-    const energyVal    = document.getElementById('energy-val');
-    if (hungerSlider) {
-      hungerSlider.addEventListener('input', () => {
-        hungerVal.textContent = hungerSlider.value;
-        hungerSlider.dataset.active = '1';
-      });
-    }
-    if (energySlider) {
-      energySlider.addEventListener('input', () => {
-        energyVal.textContent = energySlider.value;
-        energySlider.dataset.active = '1';
-      });
-    }
-
-    // Adherence button toggle logic
-    Dashboard._bindAdherenceBtns(
-      document.querySelectorAll('#daily-entry-form .adherence-btn'),
-      document.querySelectorAll('#daily-entry-form .adherence-tag'),
-      document.getElementById('adherence-why-row'),
-      document.getElementById('entry-adherence-score'),
-      document.getElementById('entry-adherence-why')
-    );
-
-    // Clear button
-    document.getElementById('entry-clear-btn').addEventListener('click', () => {
-      newFormEl.reset();
-      document.getElementById('entry-date').value = today;
-      Dashboard._clearComputedDisplay();
-      document.getElementById('daily-entry-mode-badge').classList.add('hidden');
-      document.getElementById('entry-submit-btn').textContent = 'Save Entry';
-      Dashboard._resetWellbeing();
-    });
-  },
-
-  handleSubmit(e) {
-    e.preventDefault();
-    const dateEl   = document.getElementById('entry-date');
-    const weightEl = document.getElementById('entry-weight');
-
-    if (!dateEl.value) {
-      UI.showToast('Please select a date.', 'error');
-      return;
-    }
-    if (!weightEl.value || isNaN(parseFloat(weightEl.value))) {
-      UI.showToast('Weight is required.', 'error');
-      return;
-    }
-
-    const formData = {
-      date:         dateEl.value,
-      weightKg:     weightEl.value,
-      caloriesKcal: UI.numOrNull(document.getElementById('entry-calories')),
-      proteinG:     UI.numOrNull(document.getElementById('entry-protein')),
-      carbsG:       UI.numOrNull(document.getElementById('entry-carbs')),
-      fatG:         UI.numOrNull(document.getElementById('entry-fat')),
-      sodiumMg:     UI.numOrNull(document.getElementById('entry-sodium')),
-      waistCm:      UI.numOrNull(document.getElementById('entry-waist')),
-      bicepCm:      UI.numOrNull(document.getElementById('entry-bicep')),
-      thighCm:      UI.numOrNull(document.getElementById('entry-thigh')),
-      nsv:           document.getElementById('entry-nsv').value.trim(),
-      stepsCount:    UI.numOrNull(document.getElementById('entry-steps')),
-      coachNotes:    document.getElementById('entry-coach-notes').value.trim() || null,
-      sleepHours:    UI.numOrNull(document.getElementById('entry-sleep')),
-      alcoholDrinks: UI.numOrNull(document.getElementById('entry-alcohol')),
-      hungerLevel:   (() => { const el = document.getElementById('entry-hunger'); return (el && el.dataset.active === '1') ? parseInt(el.value) : null; })(),
-      energyLevel:   (() => { const el = document.getElementById('entry-energy'); return (el && el.dataset.active === '1') ? parseInt(el.value) : null; })(),
-      adherenceScore: document.getElementById('entry-adherence-score').value || null,
-      adherenceWhy:   document.getElementById('entry-adherence-why').value || null
-    };
-
-    const saved = Entries.add(formData);
-    if (saved) {
-      UI.showToast('Entry saved!', 'success');
-      Dashboard._updateSummaryCards();
-      // Update badge and button to reflect it's now an existing entry
-      document.getElementById('daily-entry-mode-badge').classList.remove('hidden');
-      document.getElementById('entry-submit-btn').textContent = 'Update Entry';
-    }
-  },
-
-  _fillForm(entry) {
-    UI.setInputVal(document.getElementById('entry-date'),     entry.date);
-    UI.setInputVal(document.getElementById('entry-weight'),   entry.weightKg);
-    UI.setInputVal(document.getElementById('entry-calories'), entry.caloriesKcal);
-    UI.setInputVal(document.getElementById('entry-protein'),  entry.proteinG);
-    UI.setInputVal(document.getElementById('entry-carbs'),    entry.carbsG);
-    UI.setInputVal(document.getElementById('entry-fat'),      entry.fatG);
-    UI.setInputVal(document.getElementById('entry-sodium'),   entry.sodiumMg);
-    UI.setInputVal(document.getElementById('entry-waist'),    entry.waistCm);
-    UI.setInputVal(document.getElementById('entry-bicep'),    entry.bicepCm);
-    UI.setInputVal(document.getElementById('entry-thigh'),    entry.thighCm);
-    UI.setInputVal(document.getElementById('entry-nsv'),      entry.nsv);
-    UI.setInputVal(document.getElementById('entry-steps'),    entry.stepsCount);
-    UI.setInputVal(document.getElementById('entry-coach-notes'), entry.coachNotes || '');
-    UI.setInputVal(document.getElementById('entry-sleep'),    entry.sleepHours);
-    UI.setInputVal(document.getElementById('entry-alcohol'),  entry.alcoholDrinks);
-    // Sliders
-    const hungerSlider = document.getElementById('entry-hunger');
-    const energySlider = document.getElementById('entry-energy');
-    const hungerVal    = document.getElementById('hunger-val');
-    const energyVal    = document.getElementById('energy-val');
-    if (entry.hungerLevel !== null && entry.hungerLevel !== undefined) {
-      if (hungerSlider) { hungerSlider.value = entry.hungerLevel; hungerSlider.dataset.active = '1'; }
-      if (hungerVal)    hungerVal.textContent = entry.hungerLevel;
-    } else {
-      if (hungerSlider) { hungerSlider.value = 5; hungerSlider.dataset.active = '0'; }
-      if (hungerVal)    hungerVal.textContent = '—';
-    }
-    if (entry.energyLevel !== null && entry.energyLevel !== undefined) {
-      if (energySlider) { energySlider.value = entry.energyLevel; energySlider.dataset.active = '1'; }
-      if (energyVal)    energyVal.textContent = entry.energyLevel;
-    } else {
-      if (energySlider) { energySlider.value = 5; energySlider.dataset.active = '0'; }
-      if (energyVal)    energyVal.textContent = '—';
-    }
-    // Restore adherence buttons
-    const scoreHidden = document.getElementById('entry-adherence-score');
-    const whyHidden   = document.getElementById('entry-adherence-why');
-    if (scoreHidden) scoreHidden.value = entry.adherenceScore || '';
-    if (whyHidden)   whyHidden.value   = entry.adherenceWhy   || '';
-    document.querySelectorAll('#daily-entry-form .adherence-btn').forEach(btn => {
-      btn.className = 'adherence-btn';
-      if (entry.adherenceScore && btn.dataset.score === entry.adherenceScore) {
-        btn.classList.add('active-' + Dashboard._adherenceClass(entry.adherenceScore));
-      }
-    });
-    const whyRow = document.getElementById('adherence-why-row');
-    if (whyRow) whyRow.classList.toggle('hidden', !entry.adherenceScore || entry.adherenceScore === 'on_plan');
-    document.querySelectorAll('#daily-entry-form .adherence-tag').forEach(tag => {
-      tag.classList.toggle('active', tag.dataset.why === entry.adherenceWhy);
-    });
-    // Show computed for existing entry
-    Dashboard._displayComputed({
-      kgFromPrev:   entry.kgLostFromPrev,
-      totalKgLost:  entry.totalKgLost,
-      totalPctLost: entry.totalPctLost,
-      bmi:          entry.bmi
-    });
-  },
-
-  _displayComputed({ kgFromPrev, totalKgLost, totalPctLost, bmi }) {
-    const prevEl = document.getElementById('calc-kg-from-prev');
-    if (prevEl) {
-      if (kgFromPrev === null) {
-        prevEl.textContent = 'First entry';
-        prevEl.classList.remove('negative');
-      } else {
-        const sign = kgFromPrev > 0 ? '−' : kgFromPrev < 0 ? '+' : '';
-        prevEl.textContent = kgFromPrev === 0 ? '0.0 kg' : `${sign}${Math.abs(kgFromPrev).toFixed(2)} kg`;
-        prevEl.classList.toggle('negative', kgFromPrev < 0);
-      }
-    }
-
-    const totalEl = document.getElementById('calc-total-kg-lost');
-    if (totalEl) {
-      totalEl.textContent = totalKgLost !== null ? `${UI.formatNum(totalKgLost, 2)} kg` : '—';
-      totalEl.classList.toggle('negative', totalKgLost !== null && totalKgLost < 0);
-    }
-
-    const pctEl = document.getElementById('calc-pct-lost');
-    if (pctEl) {
-      pctEl.textContent = totalPctLost !== null ? `${UI.formatNum(totalPctLost, 1)}%` : '—';
-    }
-
-    const bmiEl = document.getElementById('calc-bmi');
-    if (bmiEl) {
-      bmiEl.textContent = bmi !== null ? `${UI.formatNum(bmi, 1)} (${Computed.bmiCategory(bmi)})` : '—';
-    }
-  },
-
-  _clearComputedDisplay() {
-    ['calc-kg-from-prev','calc-total-kg-lost','calc-pct-lost','calc-bmi'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.textContent = '—'; el.classList.remove('negative'); }
-    });
-  },
-
-  _adherenceClass(score) {
-    if (score === 'on_plan') return 'on';
-    if (score === 'close')   return 'close';
-    return 'off';
-  },
-
-  _bindAdherenceBtns(btns, tags, whyRow, scoreHidden, whyHidden) {
-    btns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const score = btn.dataset.score;
-        scoreHidden.value = score;
-        btns.forEach(b => b.className = 'adherence-btn');
-        btn.classList.add('active-' + Dashboard._adherenceClass(score));
-        if (score === 'on_plan') {
-          whyRow.classList.add('hidden');
-          if (whyHidden) whyHidden.value = '';
-          tags.forEach(t => t.classList.remove('active'));
-        } else {
-          whyRow.classList.remove('hidden');
-        }
-      });
-    });
-    tags.forEach(tag => {
-      tag.addEventListener('click', () => {
-        tags.forEach(t => t.classList.remove('active'));
-        tag.classList.add('active');
-        if (whyHidden) whyHidden.value = tag.dataset.why;
-      });
-    });
-  },
-
-  _resetWellbeing() {
-    const hungerSlider = document.getElementById('entry-hunger');
-    const energySlider = document.getElementById('entry-energy');
-    if (hungerSlider) { hungerSlider.value = 5; hungerSlider.dataset.active = '0'; }
-    if (energySlider) { energySlider.value = 5; energySlider.dataset.active = '0'; }
-    const hungerVal = document.getElementById('hunger-val');
-    const energyVal = document.getElementById('energy-val');
-    if (hungerVal) hungerVal.textContent = '—';
-    if (energyVal) energyVal.textContent = '—';
-    const scoreHidden = document.getElementById('entry-adherence-score');
-    const whyHidden   = document.getElementById('entry-adherence-why');
-    if (scoreHidden) scoreHidden.value = '';
-    if (whyHidden)   whyHidden.value   = '';
-    document.querySelectorAll('#daily-entry-form .adherence-btn').forEach(b => b.className = 'adherence-btn');
-    document.querySelectorAll('#daily-entry-form .adherence-tag').forEach(t => t.classList.remove('active'));
-    const whyRow = document.getElementById('adherence-why-row');
-    if (whyRow) whyRow.classList.add('hidden');
   }
 };
 
@@ -1785,7 +1781,7 @@ const History = {
     document.querySelectorAll('#edit-adherence-btns .adherence-btn').forEach(btn => {
       btn.className = 'adherence-btn';
       if (entry.adherenceScore && btn.dataset.score === entry.adherenceScore) {
-        btn.classList.add('active-' + Dashboard._adherenceClass(entry.adherenceScore));
+        btn.classList.add('active-' + Entry._adherenceClass(entry.adherenceScore));
       }
     });
     const eWhyRow = document.getElementById('edit-adherence-why-row');
@@ -1793,7 +1789,7 @@ const History = {
     document.querySelectorAll('#edit-adherence-tags .adherence-tag').forEach(tag => {
       tag.classList.toggle('active', tag.dataset.why === entry.adherenceWhy);
     });
-    Dashboard._bindAdherenceBtns(
+    Entry._bindAdherenceBtns(
       document.querySelectorAll('#edit-adherence-btns .adherence-btn'),
       document.querySelectorAll('#edit-adherence-tags .adherence-tag'),
       document.getElementById('edit-adherence-why-row'),
@@ -1897,6 +1893,395 @@ const History = {
 };
 
 /* ============================================================
+   ENTRY — daily entry form (page-entry)
+   ============================================================ */
+const Entry = {
+  render() {
+    const today = UI.todayISO();
+    Entry._initCollapsibles();
+    Entry._initForm(today);
+    Entry._renderCoachTargetsCard(today);
+  },
+
+  _initCollapsibles() {
+    document.querySelectorAll('.entry-card-header-collapsible').forEach(header => {
+      // Clone to remove stale listeners
+      const newHeader = header.cloneNode(true);
+      header.parentNode.replaceChild(newHeader, header);
+      newHeader.addEventListener('click', () => {
+        const targetId = newHeader.dataset.target;
+        const body = document.getElementById(targetId);
+        if (!body) return;
+        const collapsed = body.classList.toggle('collapsed');
+        const arrow = newHeader.querySelector('.entry-collapse-arrow');
+        if (arrow) arrow.textContent = collapsed ? '&#8963;' : '&#8964;';
+      });
+    });
+  },
+
+  _renderCoachTargetsCard(dateStr) {
+    const card = document.getElementById('entry-coach-targets-card');
+    const grid = document.getElementById('entry-coach-targets-grid');
+    if (!card || !grid) return;
+    if (!Coach.isEnabled()) { card.classList.add('hidden'); return; }
+
+    const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dayName = days[new Date(y, m - 1, d).getDay()];
+    const plan = State.profile.coach?.weeklyPlan?.[dayName];
+    if (!plan || (!plan.caloriesTarget && !plan.proteinTarget && !plan.fatTarget && !plan.carbsTarget)) {
+      card.classList.add('hidden');
+      return;
+    }
+    card.classList.remove('hidden');
+    const chip = (label, val, unit) => val != null
+      ? `<div class="coach-target-chip"><span class="coach-target-label">${label}</span><span class="coach-target-val">${val}${unit}</span></div>`
+      : '';
+    grid.innerHTML = [
+      chip('Calories', plan.caloriesTarget, ' kcal'),
+      chip('Protein',  plan.proteinTarget,  'g'),
+      chip('Fat',      plan.fatTarget,      'g'),
+      chip('Carbs',    plan.carbsTarget,    'g'),
+      chip('Steps',    plan.stepsTarget != null ? Number(plan.stepsTarget).toLocaleString() : null, ''),
+    ].join('');
+  },
+
+  _lockForm() {
+    document.getElementById('daily-entry-form')?.classList.add('form-locked');
+    document.getElementById('entry-submit-btn')?.classList.add('hidden');
+    document.getElementById('entry-clear-btn')?.classList.add('hidden');
+    document.getElementById('entry-edit-btn')?.classList.remove('hidden');
+  },
+
+  _unlockForm() {
+    document.getElementById('daily-entry-form')?.classList.remove('form-locked');
+    document.getElementById('entry-submit-btn')?.classList.remove('hidden');
+    document.getElementById('entry-clear-btn')?.classList.remove('hidden');
+    document.getElementById('entry-edit-btn')?.classList.add('hidden');
+  },
+
+  _initForm(today) {
+    const dateInput   = document.getElementById('entry-date');
+    const weightInput = document.getElementById('entry-weight');
+    if (!dateInput || !weightInput) return;
+
+    if (!dateInput.value) dateInput.value = today;
+
+    const _applyExistingState = (dateStr) => {
+      const ex = Entries.getById(dateStr);
+      if (ex) {
+        Entry._fillForm(ex);
+        Entry._lockForm();
+        document.getElementById('entry-mode-badge')?.classList.remove('hidden');
+        const sb = document.getElementById('entry-submit-btn');
+        if (sb) sb.textContent = 'Update Entry';
+      } else {
+        Entry._unlockForm();
+        document.getElementById('daily-entry-form')?.reset();
+        document.getElementById('entry-date').value = dateStr;
+        Entry._clearComputedDisplay();
+        Entry._resetWellbeing();
+        document.getElementById('entry-mode-badge')?.classList.add('hidden');
+        const sb = document.getElementById('entry-submit-btn');
+        if (sb) sb.textContent = 'Save Entry';
+      }
+      Entry._renderCoachTargetsCard(dateStr);
+      Coach.renderCheckInPanel(dateStr);
+    };
+
+    _applyExistingState(dateInput.value || today);
+
+    const liveUpdate = () => {
+      const date = document.getElementById('entry-date').value;
+      const weight = parseFloat(document.getElementById('entry-weight').value);
+      if (date && !isNaN(weight)) {
+        Entry._displayComputed(Computed.forLiveEntry(date, weight));
+      } else {
+        Entry._clearComputedDisplay();
+      }
+    };
+
+    // Clone weight input to remove stale listeners
+    const newWeight = weightInput.cloneNode(true);
+    weightInput.parentNode.replaceChild(newWeight, weightInput);
+    newWeight.addEventListener('input', liveUpdate);
+    newWeight.addEventListener('change', liveUpdate);
+
+    // Clone date input
+    const newDate = dateInput.cloneNode(true);
+    dateInput.parentNode.replaceChild(newDate, dateInput);
+    newDate.addEventListener('change', () => {
+      _applyExistingState(newDate.value);
+      liveUpdate();
+    });
+
+    // Form submit
+    const form = document.getElementById('daily-entry-form');
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+    document.getElementById('daily-entry-form').addEventListener('submit', Entry.handleSubmit);
+
+    // Sliders
+    const hungerSlider = document.getElementById('entry-hunger');
+    const energySlider = document.getElementById('entry-energy');
+    const hungerVal    = document.getElementById('hunger-val');
+    const energyVal    = document.getElementById('energy-val');
+    if (hungerSlider) hungerSlider.addEventListener('input', () => { if (hungerVal) hungerVal.textContent = hungerSlider.value; hungerSlider.dataset.active = '1'; });
+    if (energySlider) energySlider.addEventListener('input', () => { if (energyVal) energyVal.textContent = energySlider.value; energySlider.dataset.active = '1'; });
+
+    // Adherence
+    Entry._bindAdherenceBtns(
+      document.querySelectorAll('#daily-entry-form .adherence-btn'),
+      document.querySelectorAll('#daily-entry-form .adherence-tag'),
+      document.getElementById('adherence-why-row'),
+      document.getElementById('entry-adherence-score'),
+      document.getElementById('entry-adherence-why')
+    );
+
+    // Lifting day buttons
+    Entry._bindLiftBtns(
+      document.querySelectorAll('#daily-entry-form .lift-btn'),
+      document.getElementById('entry-lifting-day')
+    );
+
+    // Edit Entry button (unlocks form)
+    const editBtn = document.getElementById('entry-edit-btn');
+    if (editBtn) {
+      const newEditBtn = editBtn.cloneNode(true);
+      editBtn.parentNode.replaceChild(newEditBtn, editBtn);
+      newEditBtn.addEventListener('click', () => Entry._unlockForm());
+    }
+
+    // Clear button
+    const clearBtn = document.getElementById('entry-clear-btn');
+    if (clearBtn) {
+      const newClear = clearBtn.cloneNode(true);
+      clearBtn.parentNode.replaceChild(newClear, clearBtn);
+      newClear.addEventListener('click', () => {
+        document.getElementById('daily-entry-form').reset();
+        document.getElementById('entry-date').value = today;
+        Entry._renderCoachTargetsCard(today);
+        Coach.renderCheckInPanel(today);
+        Entry._clearComputedDisplay();
+        document.getElementById('entry-mode-badge')?.classList.add('hidden');
+        const sb = document.getElementById('entry-submit-btn');
+        if (sb) sb.textContent = 'Save Entry';
+        Entry._resetWellbeing();
+        Entry._unlockForm();
+      });
+    }
+  },
+
+  _bindLiftBtns(btns, hiddenInput) {
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        btns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (hiddenInput) hiddenInput.value = btn.dataset.lift;
+      });
+    });
+  },
+
+  handleSubmit(e) {
+    e.preventDefault();
+    const dateEl   = document.getElementById('entry-date');
+    const weightEl = document.getElementById('entry-weight');
+
+    if (!dateEl.value) { UI.showToast('Please select a date.', 'error'); return; }
+    if (!weightEl.value || isNaN(parseFloat(weightEl.value))) { UI.showToast('Weight is required.', 'error'); return; }
+
+    const liftVal = document.getElementById('entry-lifting-day')?.value;
+    const formData = {
+      date:         dateEl.value,
+      weightKg:     weightEl.value,
+      caloriesKcal: UI.numOrNull(document.getElementById('entry-calories')),
+      proteinG:     UI.numOrNull(document.getElementById('entry-protein')),
+      carbsG:       UI.numOrNull(document.getElementById('entry-carbs')),
+      fatG:         UI.numOrNull(document.getElementById('entry-fat')),
+      sodiumMg:     UI.numOrNull(document.getElementById('entry-sodium')),
+      waistCm:      UI.numOrNull(document.getElementById('entry-waist')),
+      bicepCm:      UI.numOrNull(document.getElementById('entry-bicep')),
+      thighCm:      UI.numOrNull(document.getElementById('entry-thigh')),
+      nsv:           document.getElementById('entry-nsv').value.trim(),
+      stepsCount:    UI.numOrNull(document.getElementById('entry-steps')),
+      coachNotes:    document.getElementById('entry-coach-notes').value.trim() || null,
+      sleepHours:    UI.numOrNull(document.getElementById('entry-sleep')),
+      alcoholDrinks: UI.numOrNull(document.getElementById('entry-alcohol')),
+      hungerLevel:   (() => { const el = document.getElementById('entry-hunger'); return (el && el.dataset.active === '1') ? parseInt(el.value) : null; })(),
+      energyLevel:   (() => { const el = document.getElementById('entry-energy'); return (el && el.dataset.active === '1') ? parseInt(el.value) : null; })(),
+      adherenceScore: document.getElementById('entry-adherence-score').value || null,
+      adherenceWhy:   document.getElementById('entry-adherence-why').value || null,
+      liftingDay:     liftVal === 'yes' ? true : (liftVal === 'no' ? false : null)
+    };
+
+    const existing = Entries.getById(formData.date);
+    if (existing) {
+      Entries.update(formData.date, formData);
+      UI.showToast('Entry updated!', 'success');
+    } else {
+      const saved = Entries.add(formData);
+      if (!saved) return;
+      UI.showToast('Entry saved!', 'success');
+    }
+    // Re-fill and re-lock after saving
+    const savedEntry = Entries.getById(formData.date);
+    if (savedEntry) Entry._fillForm(savedEntry);
+    Entry._lockForm();
+    document.getElementById('entry-mode-badge')?.classList.remove('hidden');
+    const sb = document.getElementById('entry-submit-btn');
+    if (sb) sb.textContent = 'Update Entry';
+  },
+
+  _fillForm(entry) {
+    UI.setInputVal(document.getElementById('entry-date'),     entry.date);
+    UI.setInputVal(document.getElementById('entry-weight'),   entry.weightKg);
+    UI.setInputVal(document.getElementById('entry-calories'), entry.caloriesKcal);
+    UI.setInputVal(document.getElementById('entry-protein'),  entry.proteinG);
+    UI.setInputVal(document.getElementById('entry-carbs'),    entry.carbsG);
+    UI.setInputVal(document.getElementById('entry-fat'),      entry.fatG);
+    UI.setInputVal(document.getElementById('entry-sodium'),   entry.sodiumMg);
+    UI.setInputVal(document.getElementById('entry-waist'),    entry.waistCm);
+    UI.setInputVal(document.getElementById('entry-bicep'),    entry.bicepCm);
+    UI.setInputVal(document.getElementById('entry-thigh'),    entry.thighCm);
+    UI.setInputVal(document.getElementById('entry-nsv'),      entry.nsv);
+    UI.setInputVal(document.getElementById('entry-steps'),    entry.stepsCount);
+    UI.setInputVal(document.getElementById('entry-coach-notes'), entry.coachNotes || '');
+    UI.setInputVal(document.getElementById('entry-sleep'),    entry.sleepHours);
+    UI.setInputVal(document.getElementById('entry-alcohol'),  entry.alcoholDrinks);
+    // Lifting day buttons
+    const liftHidden = document.getElementById('entry-lifting-day');
+    document.querySelectorAll('#daily-entry-form .lift-btn').forEach(btn => {
+      btn.classList.remove('active');
+      if (entry.liftingDay === true  && btn.dataset.lift === 'yes') btn.classList.add('active');
+      if (entry.liftingDay === false && btn.dataset.lift === 'no')  btn.classList.add('active');
+    });
+    if (liftHidden) liftHidden.value = entry.liftingDay === true ? 'yes' : (entry.liftingDay === false ? 'no' : '');
+    const hungerSlider = document.getElementById('entry-hunger');
+    const energySlider = document.getElementById('entry-energy');
+    const hungerVal    = document.getElementById('hunger-val');
+    const energyVal    = document.getElementById('energy-val');
+    if (entry.hungerLevel !== null && entry.hungerLevel !== undefined) {
+      if (hungerSlider) { hungerSlider.value = entry.hungerLevel; hungerSlider.dataset.active = '1'; }
+      if (hungerVal)    hungerVal.textContent = entry.hungerLevel;
+    } else {
+      if (hungerSlider) { hungerSlider.value = 5; hungerSlider.dataset.active = '0'; }
+      if (hungerVal)    hungerVal.textContent = '—';
+    }
+    if (entry.energyLevel !== null && entry.energyLevel !== undefined) {
+      if (energySlider) { energySlider.value = entry.energyLevel; energySlider.dataset.active = '1'; }
+      if (energyVal)    energyVal.textContent = entry.energyLevel;
+    } else {
+      if (energySlider) { energySlider.value = 5; energySlider.dataset.active = '0'; }
+      if (energyVal)    energyVal.textContent = '—';
+    }
+    const scoreHidden = document.getElementById('entry-adherence-score');
+    const whyHidden   = document.getElementById('entry-adherence-why');
+    if (scoreHidden) scoreHidden.value = entry.adherenceScore || '';
+    if (whyHidden)   whyHidden.value   = entry.adherenceWhy   || '';
+    document.querySelectorAll('#daily-entry-form .adherence-btn').forEach(btn => {
+      btn.className = 'adherence-btn';
+      if (entry.adherenceScore && btn.dataset.score === entry.adherenceScore)
+        btn.classList.add('active-' + Entry._adherenceClass(entry.adherenceScore));
+    });
+    const whyRow = document.getElementById('adherence-why-row');
+    if (whyRow) whyRow.classList.toggle('hidden', !entry.adherenceScore || entry.adherenceScore === 'on_plan');
+    document.querySelectorAll('#daily-entry-form .adherence-tag').forEach(tag => {
+      tag.classList.toggle('active', tag.dataset.why === entry.adherenceWhy);
+    });
+    Entry._displayComputed({
+      kgFromPrev:   entry.kgLostFromPrev,
+      totalKgLost:  entry.totalKgLost,
+      totalPctLost: entry.totalPctLost,
+      bmi:          entry.bmi
+    });
+  },
+
+  _displayComputed({ kgFromPrev, totalKgLost, totalPctLost, bmi }) {
+    const prevEl = document.getElementById('calc-kg-from-prev');
+    if (prevEl) {
+      if (kgFromPrev === null) {
+        prevEl.textContent = 'First entry';
+        prevEl.classList.remove('negative');
+      } else {
+        const sign = kgFromPrev > 0 ? '−' : kgFromPrev < 0 ? '+' : '';
+        prevEl.textContent = kgFromPrev === 0 ? '0.0 kg' : `${sign}${Math.abs(kgFromPrev).toFixed(2)} kg`;
+        prevEl.classList.toggle('negative', kgFromPrev < 0);
+      }
+    }
+    const totalEl = document.getElementById('calc-total-kg-lost');
+    if (totalEl) {
+      totalEl.textContent = totalKgLost !== null ? `${UI.formatNum(totalKgLost, 2)} kg` : '—';
+      totalEl.classList.toggle('negative', totalKgLost !== null && totalKgLost < 0);
+    }
+    const pctEl = document.getElementById('calc-pct-lost');
+    if (pctEl) pctEl.textContent = totalPctLost !== null ? `${UI.formatNum(totalPctLost, 1)}%` : '—';
+    const bmiEl = document.getElementById('calc-bmi');
+    if (bmiEl) bmiEl.textContent = bmi !== null ? `${UI.formatNum(bmi, 1)} (${Computed.bmiCategory(bmi)})` : '—';
+  },
+
+  _clearComputedDisplay() {
+    ['calc-kg-from-prev','calc-total-kg-lost','calc-pct-lost','calc-bmi'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = '—'; el.classList.remove('negative'); }
+    });
+  },
+
+  _adherenceClass(score) {
+    if (score === 'on_plan') return 'on';
+    if (score === 'close')   return 'close';
+    return 'off';
+  },
+
+  _bindAdherenceBtns(btns, tags, whyRow, scoreHidden, whyHidden) {
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const score = btn.dataset.score;
+        scoreHidden.value = score;
+        btns.forEach(b => b.className = 'adherence-btn');
+        btn.classList.add('active-' + Entry._adherenceClass(score));
+        if (score === 'on_plan') {
+          whyRow.classList.add('hidden');
+          if (whyHidden) whyHidden.value = '';
+          tags.forEach(t => t.classList.remove('active'));
+        } else {
+          whyRow.classList.remove('hidden');
+        }
+      });
+    });
+    tags.forEach(tag => {
+      tag.addEventListener('click', () => {
+        tags.forEach(t => t.classList.remove('active'));
+        tag.classList.add('active');
+        if (whyHidden) whyHidden.value = tag.dataset.why;
+      });
+    });
+  },
+
+  _resetWellbeing() {
+    const hungerSlider = document.getElementById('entry-hunger');
+    const energySlider = document.getElementById('entry-energy');
+    if (hungerSlider) { hungerSlider.value = 5; hungerSlider.dataset.active = '0'; }
+    if (energySlider) { energySlider.value = 5; energySlider.dataset.active = '0'; }
+    const hungerVal = document.getElementById('hunger-val');
+    const energyVal = document.getElementById('energy-val');
+    if (hungerVal) hungerVal.textContent = '—';
+    if (energyVal) energyVal.textContent = '—';
+    const scoreHidden = document.getElementById('entry-adherence-score');
+    const whyHidden   = document.getElementById('entry-adherence-why');
+    if (scoreHidden) scoreHidden.value = '';
+    if (whyHidden)   whyHidden.value   = '';
+    document.querySelectorAll('#daily-entry-form .adherence-btn').forEach(b => b.className = 'adherence-btn');
+    document.querySelectorAll('#daily-entry-form .adherence-tag').forEach(t => t.classList.remove('active'));
+    const whyRow = document.getElementById('adherence-why-row');
+    if (whyRow) whyRow.classList.add('hidden');
+    // Reset lifting day
+    document.querySelectorAll('#daily-entry-form .lift-btn').forEach(b => b.classList.remove('active'));
+    const liftHidden = document.getElementById('entry-lifting-day');
+    if (liftHidden) liftHidden.value = '';
+  }
+};
+
+/* ============================================================
    CHARTS — Chart.js visualizations
    ============================================================ */
 const Charts = {
@@ -1919,24 +2304,99 @@ const Charts = {
     });
   },
 
+  /** Simple linear regression → array of fitted y values (nulls preserved for gaps). */
+  _calcLinearRegression(data) {
+    const pts = data.map((y, x) => ({ x, y })).filter(p => p.y !== null && p.y !== undefined && !isNaN(p.y));
+    if (pts.length < 2) return data.map(() => null);
+    const n = pts.length;
+    const sumX  = pts.reduce((s, p) => s + p.x, 0);
+    const sumY  = pts.reduce((s, p) => s + p.y, 0);
+    const sumXY = pts.reduce((s, p) => s + p.x * p.y, 0);
+    const sumX2 = pts.reduce((s, p) => s + p.x * p.x, 0);
+    const denom = n * sumX2 - sumX * sumX;
+    if (denom === 0) return data.map(() => null);
+    const m = (n * sumXY - sumX * sumY) / denom;
+    const b = (sumY - m * sumX) / n;
+    return data.map((_, i) => parseFloat((m * i + b).toFixed(2)));
+  },
+
+  /** Minimal Chart.js options for mini charts on the Summary page. */
+  _miniConfig(yLabel) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1f1f1f', titleColor: '#f0f0f0',
+          bodyColor: '#9ca3af', borderColor: '#2e2e2e', borderWidth: 1, padding: 8
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#6b7280', maxRotation: 45, font: { size: 9 } }, grid: { color: '#1f1f1f' } },
+        y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f1f1f' },
+             title: { display: !!yLabel, text: yLabel, color: '#6b7280', font: { size: 10 } } }
+      }
+    };
+  },
+
+  /** Return the coach daily target for a given field and date (by day of week). */
+  _coachTargetForDate(dateStr, field) {
+    if (!Coach.isEnabled()) return null;
+    const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dayName = days[new Date(y, m - 1, d).getDay()];
+    return State.profile.coach?.weeklyPlan?.[dayName]?.[field] || null;
+  },
+
   /** Render all charts on the Graphs page. */
   render() {
-    Charts.destroyAll();
     const allEntries = Entries.getSorted();
 
-    // Apply date range filter
-    const rangeVal = document.getElementById('graphs-range-select').value;
+    // Preserve current range/date values before cloning
+    const rangeVal   = document.getElementById('graphs-range-select').value;
+    const fromVal    = document.getElementById('graphs-from-date')?.value || '';
+    const toVal      = document.getElementById('graphs-to-date')?.value || '';
 
-    // Re-bind range select
+    // Re-bind range select (clone removes stale listeners)
     const rangeSelect = document.getElementById('graphs-range-select');
     const newRange = rangeSelect.cloneNode(true);
     newRange.value = rangeVal;
     rangeSelect.parentNode.replaceChild(newRange, rangeSelect);
-    newRange.addEventListener('change', () => Charts.render());
 
-    const entries = Charts._filterByRange(allEntries, newRange.value);
+    const customRangeEl = document.getElementById('graphs-custom-range');
+    const fromEl = document.getElementById('graphs-from-date');
+    const toEl   = document.getElementById('graphs-to-date');
+    if (fromEl) fromEl.value = fromVal;
+    if (toEl)   toEl.value   = toVal;
 
-    const emptyMsg = document.getElementById('graphs-empty');
+    const _applyAndRender = () => {
+      const sel = document.getElementById('graphs-range-select').value;
+      if (customRangeEl) customRangeEl.classList.toggle('hidden', sel !== 'custom');
+      Charts._renderCharts(allEntries);
+    };
+
+    newRange.addEventListener('change', _applyAndRender);
+    // Custom range apply button
+    const applyBtn = document.getElementById('graphs-apply-range');
+    if (applyBtn) {
+      const newApply = applyBtn.cloneNode(true);
+      applyBtn.parentNode.replaceChild(newApply, applyBtn);
+      newApply.addEventListener('click', () => Charts._renderCharts(allEntries));
+    }
+    // Show/hide custom range row immediately
+    if (customRangeEl) customRangeEl.classList.toggle('hidden', rangeVal !== 'custom');
+
+    Charts._renderCharts(allEntries);
+  },
+
+  /** Internal: filter and draw all charts. */
+  _renderCharts(allEntries) {
+    Charts.destroyAll();
+    const rangeVal = document.getElementById('graphs-range-select').value;
+    const entries = Charts._filterByRange(allEntries, rangeVal);
+
+    const emptyMsg  = document.getElementById('graphs-empty');
     const chartsGrid = document.getElementById('charts-grid');
 
     if (entries.length === 0) {
@@ -1944,22 +2404,34 @@ const Charts = {
       chartsGrid.classList.add('hidden');
       return;
     }
-
     emptyMsg.classList.add('hidden');
     chartsGrid.classList.remove('hidden');
 
     const labels = entries.map(e => UI.formatDate(e.date));
-
     Charts._createWeightChart(labels, entries);
     Charts._createKgLostChart(labels, entries);
     Charts._createBMIChart(labels, entries);
     Charts._createCaloriesChart(labels, entries);
     Charts._createMacrosChart(labels, entries);
     Charts._createMeasurementsChart(labels, entries);
+    Charts._createStepsChart(labels, entries);
+    Charts._createSodiumChart(labels, entries);
+    Charts._createSodiumWeightChart(labels, entries);
+    Charts._createPointsChart(labels, entries);
+    Charts._createCoachCheckInsChart(entries);
   },
 
-  /** Filter entries to the last N days. 'all' returns full array. */
+  /** Filter entries by range. Supports last-N-days or custom from/to. */
   _filterByRange(entries, rangeVal) {
+    if (rangeVal === 'custom') {
+      const fromISO = document.getElementById('graphs-from-date')?.value || '';
+      const toISO   = document.getElementById('graphs-to-date')?.value   || '';
+      if (!fromISO && !toISO) return entries;
+      return entries.filter(e =>
+        (!fromISO || e.date >= fromISO) &&
+        (!toISO   || e.date <= toISO)
+      );
+    }
     if (rangeVal === 'all' || !rangeVal) return entries;
     const days = parseInt(rangeVal);
     if (isNaN(days)) return entries;
@@ -2039,6 +2511,26 @@ const Charts = {
         fill: false
       });
     }
+    // Target pace line: if user set a weekly kg goal
+    const weeklyGoal = State.profile.weeklyGoalKg;
+    const journeyStart = State.profile.journeyStartDate;
+    const startW = State.profile.startingWeightKg;
+    if (weeklyGoal && journeyStart && startW) {
+      const targetPaceData = entries.map(e => {
+        const days = UI.dateDiffDays(journeyStart, e.date);
+        const target = startW - (weeklyGoal * days / 7);
+        return parseFloat(Math.max(goalW || 0, target).toFixed(1));
+      });
+      datasets.push({
+        label: `Target pace (${weeklyGoal} kg/wk)`,
+        data: targetPaceData,
+        borderColor: '#fb923c',
+        borderWidth: 1.5,
+        borderDash: [4, 4],
+        pointRadius: 0,
+        fill: false
+      });
+    }
     const cfg = Charts._baseConfig();
     cfg.scales.y.title = { display: true, text: 'kg', color: '#6b7280' };
     State.charts.weight = new Chart(document.getElementById('chart-weight'), {
@@ -2046,25 +2538,40 @@ const Charts = {
     });
   },
 
-  /** Line chart: total kg lost over time */
+  /** Line chart: total kg lost over time with linear trend */
   _createKgLostChart(labels, entries) {
+    const kgData = entries.map(e => e.totalKgLost);
+    const trendLine = Charts._calcLinearRegression(kgData);
     const cfg = Charts._baseConfig();
     cfg.scales.y.title = { display: true, text: 'kg lost', color: '#6b7280' };
     State.charts.kgLost = new Chart(document.getElementById('chart-kg-lost'), {
       type: 'line',
       data: {
         labels,
-        datasets: [{
-          label: 'Total kg Lost',
-          data: entries.map(e => e.totalKgLost),
-          borderColor: '#4ade80',
-          backgroundColor: 'rgba(74, 222, 128, 0.1)',
-          borderWidth: 2,
-          pointRadius: 3,
-          tension: 0.3,
-          fill: true,
-          spanGaps: false
-        }]
+        datasets: [
+          {
+            label: 'Total kg Lost',
+            data: kgData,
+            borderColor: '#4ade80',
+            backgroundColor: 'rgba(74,222,128,0.1)',
+            borderWidth: 2,
+            pointRadius: 3,
+            tension: 0.3,
+            fill: true,
+            spanGaps: false
+          },
+          {
+            label: 'Trend',
+            data: trendLine,
+            borderColor: '#fbbf24',
+            borderWidth: 1.5,
+            borderDash: [6, 3],
+            pointRadius: 0,
+            fill: false,
+            spanGaps: true,
+            tension: 0
+          }
+        ]
       },
       options: cfg
     });
@@ -2110,59 +2617,75 @@ const Charts = {
     });
   },
 
-  /** Bar chart: daily calorie intake */
+  /** Bar chart: daily calorie intake with coach compliance coloring */
   _createCaloriesChart(labels, entries) {
     const cfg = Charts._baseConfig();
     cfg.scales.y.title = { display: true, text: 'kcal', color: '#6b7280' };
+    const coachEnabled = Coach.isEnabled();
+    const datasets = [{
+      label: 'Calories (kcal)',
+      data: entries.map(e => e.caloriesKcal),
+      backgroundColor: entries.map(e => {
+        if (!coachEnabled || e.caloriesKcal === null) return 'rgba(96,165,250,0.6)';
+        const target = Charts._coachTargetForDate(e.date, 'caloriesTarget');
+        if (!target) return 'rgba(96,165,250,0.6)';
+        return e.caloriesKcal <= target ? 'rgba(74,222,128,0.65)' : 'rgba(248,113,113,0.65)';
+      }),
+      borderColor: entries.map(e => {
+        if (!coachEnabled || e.caloriesKcal === null) return '#60a5fa';
+        const target = Charts._coachTargetForDate(e.date, 'caloriesTarget');
+        if (!target) return '#60a5fa';
+        return e.caloriesKcal <= target ? '#4ade80' : '#f87171';
+      }),
+      borderWidth: 1,
+      borderRadius: 3
+    }];
+    if (coachEnabled) {
+      const targetData = entries.map(e => Charts._coachTargetForDate(e.date, 'caloriesTarget'));
+      if (targetData.some(v => v !== null)) {
+        datasets.push({
+          label: 'Daily Target',
+          data: targetData,
+          type: 'line',
+          borderColor: '#fbbf24',
+          borderWidth: 2,
+          borderDash: [6, 3],
+          pointRadius: 0,
+          fill: false,
+          spanGaps: true
+        });
+      }
+    }
     State.charts.calories = new Chart(document.getElementById('chart-calories'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Calories (kcal)',
-          data: entries.map(e => e.caloriesKcal),
-          backgroundColor: 'rgba(96, 165, 250, 0.6)',
-          borderColor: '#60a5fa',
-          borderWidth: 1,
-          borderRadius: 3
-        }]
-      },
-      options: cfg
+      type: 'bar', data: { labels, datasets }, options: cfg
     });
   },
 
-  /** Stacked bar chart: protein, carbs, fat over time */
+  /** Stacked bar chart: protein, carbs, fat over time with optional coach targets */
   _createMacrosChart(labels, entries) {
     const cfg = Charts._baseConfig();
     cfg.scales.y.title = { display: true, text: 'grams', color: '#6b7280' };
     cfg.scales.y.stacked = true;
     cfg.scales.x.stacked = true;
+    const datasets = [
+      { label: 'Protein (g)',       data: entries.map(e => e.proteinG), backgroundColor: 'rgba(74,222,128,0.7)',  borderRadius: 2 },
+      { label: 'Carbohydrates (g)', data: entries.map(e => e.carbsG),   backgroundColor: 'rgba(96,165,250,0.7)',  borderRadius: 2 },
+      { label: 'Fat (g)',           data: entries.map(e => e.fatG),      backgroundColor: 'rgba(251,191,36,0.7)', borderRadius: 2 }
+    ];
+    if (Coach.isEnabled()) {
+      const proteinTargets = entries.map(e => Charts._coachTargetForDate(e.date, 'proteinTarget'));
+      const fatTargets     = entries.map(e => Charts._coachTargetForDate(e.date, 'fatTarget'));
+      const carbsTargets   = entries.map(e => Charts._coachTargetForDate(e.date, 'carbsTarget'));
+      const addTarget = (label, data, color) => {
+        if (!data.some(v => v !== null)) return;
+        datasets.push({ label, data, type: 'line', borderColor: color, borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, fill: false, spanGaps: true, stack: undefined });
+      };
+      addTarget('Protein Target', proteinTargets, '#86efac');
+      addTarget('Fat Target',     fatTargets,     '#fde68a');
+      addTarget('Carbs Target',   carbsTargets,   '#93c5fd');
+    }
     State.charts.macros = new Chart(document.getElementById('chart-macros'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'Protein (g)',
-            data: entries.map(e => e.proteinG),
-            backgroundColor: 'rgba(74, 222, 128, 0.7)',
-            borderRadius: 2
-          },
-          {
-            label: 'Carbohydrates (g)',
-            data: entries.map(e => e.carbsG),
-            backgroundColor: 'rgba(96, 165, 250, 0.7)',
-            borderRadius: 2
-          },
-          {
-            label: 'Fat (g)',
-            data: entries.map(e => e.fatG),
-            backgroundColor: 'rgba(251, 191, 36, 0.7)',
-            borderRadius: 2
-          }
-        ]
-      },
-      options: cfg
+      type: 'bar', data: { labels, datasets }, options: cfg
     });
   },
 
@@ -2175,35 +2698,289 @@ const Charts = {
       data: {
         labels,
         datasets: [
+          { label: 'Waist (cm)', data: entries.map(e => e.waistCm), borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false },
+          { label: 'Bicep (cm)', data: entries.map(e => e.bicepCm), borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.1)', borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false },
+          { label: 'Thigh (cm)', data: entries.map(e => e.thighCm), borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)',  borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false }
+        ]
+      },
+      options: cfg
+    });
+  },
+
+  /** Bar + trend line: daily step count */
+  _createStepsChart(labels, entries) {
+    const canvas = document.getElementById('chart-steps');
+    if (!canvas) return;
+    const stepsData = entries.map(e => e.stepsCount !== null && e.stepsCount !== undefined ? e.stepsCount : null);
+    const trendLine = Charts._calcLinearRegression(stepsData);
+    const cfg = Charts._baseConfig();
+    cfg.scales.y.title = { display: true, text: 'steps', color: '#6b7280' };
+    const datasets = [
+      {
+        label: 'Steps',
+        data: stepsData,
+        backgroundColor: 'rgba(74,222,128,0.5)',
+        borderColor: '#4ade80',
+        borderWidth: 1,
+        borderRadius: 3
+      },
+      {
+        label: 'Trend',
+        data: trendLine,
+        type: 'line',
+        borderColor: '#fbbf24',
+        borderWidth: 2,
+        borderDash: [6, 3],
+        pointRadius: 0,
+        fill: false,
+        spanGaps: true,
+        tension: 0
+      }
+    ];
+    if (Coach.isEnabled()) {
+      const stepsTargets = entries.map(e => Charts._coachTargetForDate(e.date, 'stepsTarget'));
+      if (stepsTargets.some(v => v !== null)) {
+        datasets.push({ label: 'Target', data: stepsTargets, type: 'line', borderColor: '#a78bfa', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, fill: false, spanGaps: true });
+      }
+    }
+    State.charts.steps = new Chart(canvas, { type: 'bar', data: { labels, datasets }, options: cfg });
+  },
+
+  /** Bar + trend line: daily sodium intake */
+  _createSodiumChart(labels, entries) {
+    const canvas = document.getElementById('chart-sodium');
+    if (!canvas) return;
+    const sodiumData = entries.map(e => e.sodiumMg);
+    const trendLine  = Charts._calcLinearRegression(sodiumData);
+    const cfg = Charts._baseConfig();
+    cfg.scales.y.title = { display: true, text: 'mg', color: '#6b7280' };
+    // Recommended daily limit reference line at 2300 mg
+    State.charts.sodium = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
           {
-            label: 'Waist (cm)',
-            data: entries.map(e => e.waistCm),
-            borderColor: '#f87171',
-            backgroundColor: 'rgba(248, 113, 113, 0.1)',
-            borderWidth: 2,
-            pointRadius: 3,
-            tension: 0.3,
-            spanGaps: false
+            label: 'Sodium (mg)',
+            data: sodiumData,
+            backgroundColor: sodiumData.map(v => v !== null && v > 2300 ? 'rgba(248,113,113,0.6)' : 'rgba(96,165,250,0.6)'),
+            borderColor:      sodiumData.map(v => v !== null && v > 2300 ? '#f87171'               : '#60a5fa'),
+            borderWidth: 1,
+            borderRadius: 3
           },
           {
-            label: 'Bicep (cm)',
-            data: entries.map(e => e.bicepCm),
+            label: 'Trend',
+            data: trendLine,
+            type: 'line',
+            borderColor: '#fbbf24',
+            borderWidth: 2,
+            borderDash: [6, 3],
+            pointRadius: 0,
+            fill: false,
+            spanGaps: true,
+            tension: 0
+          },
+          {
+            label: 'Limit (2300 mg)',
+            data: entries.map(() => 2300),
+            type: 'line',
+            borderColor: 'rgba(248,113,113,0.5)',
+            borderWidth: 1.5,
+            borderDash: [4, 4],
+            pointRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: cfg
+    });
+  },
+
+  /** Bar chart: daily gamification points (max 5) + running total line */
+  _createPointsChart(labels, entries) {
+    const canvas = document.getElementById('chart-points');
+    if (!canvas) return;
+    const pointsData = entries.map(e => Computed.calcPoints(e));
+    let total = 0;
+    const runningTotal = pointsData.map(p => { total += p; return total; });
+    const cfg = Charts._baseConfig();
+    cfg.scales.y = {
+      type: 'linear', position: 'left',
+      min: 0, max: 5,
+      title: { display: true, text: 'points / day', color: '#6b7280' },
+      ticks: { color: '#6b7280', font: { size: 11 }, stepSize: 1 },
+      grid: { color: '#1f1f1f' }
+    };
+    cfg.scales.y1 = {
+      type: 'linear', position: 'right',
+      title: { display: true, text: 'total points', color: '#fbbf24' },
+      ticks: { color: '#6b7280', font: { size: 11 } },
+      grid: { drawOnChartArea: false }
+    };
+    State.charts.points = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Points earned',
+            data: pointsData,
+            backgroundColor: pointsData.map(p => p >= 4 ? 'rgba(74,222,128,0.75)' : p >= 2 ? 'rgba(251,191,36,0.75)' : 'rgba(248,113,113,0.75)'),
+            borderColor:      pointsData.map(p => p >= 4 ? '#4ade80'              : p >= 2 ? '#fbbf24'              : '#f87171'),
+            borderWidth: 1, borderRadius: 3, yAxisID: 'y'
+          },
+          {
+            label: 'Running total',
+            data: runningTotal,
+            type: 'line',
+            borderColor: '#fbbf24',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: cfg
+    });
+  },
+
+  /** Line chart: weight at each coach check-in date + trend */
+  _createCoachCheckInsChart(entries) {
+    const canvas = document.getElementById('chart-coach-checkins');
+    if (!canvas) return;
+    const wrap = canvas.closest('.chart-card');
+    if (!Coach.isEnabled()) { if (wrap) wrap.classList.add('hidden'); return; }
+
+    const checkInEntries = entries.filter(e => Coach.isCheckInDay(e.date));
+    if (checkInEntries.length === 0) { if (wrap) wrap.classList.add('hidden'); return; }
+    if (wrap) wrap.classList.remove('hidden');
+
+    const ciLabels = checkInEntries.map(e => UI.formatDate(e.date));
+    const weightData = checkInEntries.map(e => e.weightKg);
+    const trendLine = Charts._calcLinearRegression(weightData);
+
+    // kg lost vs previous check-in
+    const kgLostPerPeriod = checkInEntries.map((e, i) => {
+      if (i === 0) return null;
+      const prev = checkInEntries[i - 1];
+      return (prev.weightKg && e.weightKg) ? parseFloat((prev.weightKg - e.weightKg).toFixed(2)) : null;
+    });
+
+    const cfg = Charts._baseConfig();
+    cfg.scales.y = {
+      type: 'linear', position: 'left',
+      title: { display: true, text: 'Weight (kg)', color: '#a78bfa' },
+      ticks: { color: '#6b7280', font: { size: 11 } },
+      grid: { color: '#1f1f1f' }
+    };
+    cfg.scales.y1 = {
+      type: 'linear', position: 'right',
+      title: { display: true, text: 'kg lost (period)', color: '#4ade80' },
+      ticks: { color: '#6b7280', font: { size: 11 } },
+      grid: { drawOnChartArea: false }
+    };
+
+    State.charts.coachCheckIns = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: ciLabels,
+        datasets: [
+          {
+            label: 'Weight at check-in (kg)',
+            data: weightData,
             borderColor: '#a78bfa',
-            backgroundColor: 'rgba(167, 139, 250, 0.1)',
+            backgroundColor: 'rgba(167,139,250,0.1)',
             borderWidth: 2,
-            pointRadius: 3,
+            pointRadius: 5,
+            pointHoverRadius: 8,
             tension: 0.3,
-            spanGaps: false
+            fill: true,
+            yAxisID: 'y'
           },
           {
-            label: 'Thigh (cm)',
-            data: entries.map(e => e.thighCm),
-            borderColor: '#38bdf8',
-            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+            label: 'Trend',
+            data: trendLine,
+            borderColor: '#fbbf24',
+            borderWidth: 1.5,
+            borderDash: [6, 3],
+            pointRadius: 0,
+            fill: false,
+            spanGaps: true,
+            yAxisID: 'y'
+          },
+          {
+            label: 'kg lost vs prev check-in',
+            data: kgLostPerPeriod,
+            type: 'bar',
+            backgroundColor: kgLostPerPeriod.map(v => v === null ? 'transparent' : v >= 0 ? 'rgba(74,222,128,0.6)' : 'rgba(248,113,113,0.6)'),
+            borderColor:      kgLostPerPeriod.map(v => v === null ? 'transparent' : v >= 0 ? '#4ade80'              : '#f87171'),
+            borderWidth: 1,
+            borderRadius: 3,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: cfg
+    });
+  },
+
+  /** Dual-axis: sodium bars + next-day weight change line */
+  _createSodiumWeightChart(labels, entries) {
+    const canvas = document.getElementById('chart-sodium-weight');
+    if (!canvas) return;
+
+    // For each entry, next-day weight change
+    const nextDayWeightChange = entries.map((e, i) => {
+      if (e.sodiumMg === null) return null;
+      const next = entries[i + 1];
+      if (!next || !next.weightKg || !e.weightKg) return null;
+      return parseFloat((next.weightKg - e.weightKg).toFixed(2));
+    });
+
+    const sodiumData = entries.map(e => e.sodiumMg);
+    const cfg = Charts._baseConfig();
+    cfg.scales.y = {
+      type: 'linear', position: 'left',
+      title: { display: true, text: 'Sodium (mg)', color: '#60a5fa' },
+      ticks: { color: '#6b7280', font: { size: 11 } },
+      grid: { color: '#1f1f1f' }
+    };
+    cfg.scales.y1 = {
+      type: 'linear', position: 'right',
+      title: { display: true, text: 'Next-day Δ weight (kg)', color: '#f87171' },
+      ticks: { color: '#6b7280', font: { size: 11 } },
+      grid: { drawOnChartArea: false }
+    };
+
+    State.charts.sodiumWeight = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Sodium (mg)',
+            data: sodiumData,
+            backgroundColor: 'rgba(96,165,250,0.5)',
+            borderColor: '#60a5fa',
+            borderWidth: 1,
+            borderRadius: 3,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Next-day weight change (kg)',
+            data: nextDayWeightChange,
+            type: 'line',
+            borderColor: '#f87171',
+            backgroundColor: 'rgba(248,113,113,0.1)',
             borderWidth: 2,
-            pointRadius: 3,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            fill: false,
+            spanGaps: false,
             tension: 0.3,
-            spanGaps: false
+            yAxisID: 'y1'
           }
         ]
       },
@@ -2226,6 +3003,7 @@ const Profile = {
     UI.setInputVal(document.getElementById('profile-start-date'),       p.journeyStartDate);
     UI.setInputVal(document.getElementById('profile-starting-weight'),  p.startingWeightKg || '');
     UI.setInputVal(document.getElementById('profile-goal-weight'),      p.goalWeightKg || '');
+    UI.setInputVal(document.getElementById('profile-weekly-goal-kg'),   p.weeklyGoalKg || '');
 
     // Computed stat cards
     Profile._updateStatCards();
@@ -2243,6 +3021,7 @@ const Profile = {
     UI.setInputVal(document.getElementById('profile-start-date'),       p.journeyStartDate);
     UI.setInputVal(document.getElementById('profile-starting-weight'),  p.startingWeightKg || '');
     UI.setInputVal(document.getElementById('profile-goal-weight'),      p.goalWeightKg || '');
+    UI.setInputVal(document.getElementById('profile-weekly-goal-kg'),   p.weeklyGoalKg || '');
 
     // Populate coach fields
     const coach = p.coach || {};
@@ -2347,6 +3126,7 @@ const Profile = {
     const start   = document.getElementById('profile-start-date').value;
     const startW  = parseFloat(document.getElementById('profile-starting-weight').value);
     const goalW   = parseFloat(document.getElementById('profile-goal-weight').value);
+    const weeklyGoalKg = UI.numOrNull(document.getElementById('profile-weekly-goal-kg'));
 
     // Basic validation
     if (!name)    { UI.showToast('Name is required.', 'error'); return; }
@@ -2368,6 +3148,7 @@ const Profile = {
     State.profile = {
       name, dob, heightCm: height, journeyStartDate: start,
       startingWeightKg: startW, goalWeightKg: goalW,
+      weeklyGoalKg: weeklyGoalKg,
       travelMode: travelEnabled,
       maintenanceCalories: maintCal,
       mvdPresets: State.profile.mvdPresets || [
@@ -2382,13 +3163,13 @@ const Profile = {
         arrangementNotes: coachNotes,
         questionsForCoach: State.profile.coach?.questionsForCoach || '',
         weeklyPlan: State.profile.coach?.weeklyPlan || {
-          monday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          tuesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          wednesday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          thursday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          friday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          saturday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''},
-          sunday: {caloriesTarget:null,proteinTarget:null,stepsTarget:null,training:''}
+          monday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          tuesday:   {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          wednesday: {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          thursday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          friday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          saturday:  {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''},
+          sunday:    {caloriesTarget:null,proteinTarget:null,fatTarget:null,carbsTarget:null,stepsTarget:null,training:''}
         }
       }
     };
@@ -2471,7 +3252,7 @@ const Photos = {
     const notes = document.getElementById('photo-session-notes').value.trim() || '';
 
     try {
-      const compress = async (file) => file ? await Photos._compressImage(file, 1200, 0.78) : null;
+      const compress = async (file) => file ? await Photos._compressImage(file) : null;
       const [front, side, back] = await Promise.all([
         compress(frontFile),
         compress(sideFile),
@@ -2514,21 +3295,43 @@ const Photos = {
    * @param {number} quality — JPEG quality (0–1)
    * @returns {Promise<string>} — base64 data URL
    */
-  _compressImage(file, maxWidth, quality) {
+  /** Compress an image file to a base64 JPEG under maxBytes.
+   *  Iteratively lowers quality (and then width) until the target is met. */
+  _compressImage(file, maxWidth = 1600, quality = 0.85, maxBytes = 900_000) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
-      img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width  = Math.round(img.width  * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
       img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        const ctx    = canvas.getContext('2d');
+
+        const draw = (w, q) => {
+          const scale = Math.min(1, w / img.width);
+          canvas.width  = Math.round(img.width  * scale);
+          canvas.height = Math.round(img.height * scale);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/jpeg', q);
+        };
+
+        // Step 1: try reducing quality in steps until under limit
+        let result = draw(maxWidth, quality);
+        let q = quality;
+        while (result.length > maxBytes && q > 0.3) {
+          q = Math.max(0.3, q - 0.1);
+          result = draw(maxWidth, q);
+        }
+
+        // Step 2: if still over limit, shrink dimensions too
+        let w = maxWidth;
+        while (result.length > maxBytes && w > 400) {
+          w = Math.round(w * 0.75);
+          result = draw(w, q);
+        }
+
+        resolve(result);
+      };
       img.src = url;
     });
   },
@@ -2693,14 +3496,16 @@ const CoachPage = {
     const plan = State.profile.coach?.weeklyPlan || {};
     tbody.innerHTML = '';
     dayNames.forEach(day => {
-      const d = plan[day] || { caloriesTarget: null, proteinTarget: null, stepsTarget: null, training: '' };
+      const d = plan[day] || { caloriesTarget: null, proteinTarget: null, fatTarget: null, carbsTarget: null, stepsTarget: null, training: '' };
       const tr = document.createElement('tr');
       tr.dataset.day = day;
       tr.innerHTML = `
         <td class="weekly-plan-day">${day.charAt(0).toUpperCase() + day.slice(1)}</td>
-        <td><input type="number" class="wp-calories" min="0" max="9999" step="50" value="${d.caloriesTarget !== null ? d.caloriesTarget : ''}" placeholder="—"></td>
-        <td><input type="number" class="wp-protein"  min="0" max="999"  step="1"  value="${d.proteinTarget  !== null ? d.proteinTarget  : ''}" placeholder="—"></td>
-        <td><input type="number" class="wp-steps"    min="0" max="99999" step="500" value="${d.stepsTarget !== null ? d.stepsTarget : ''}" placeholder="—"></td>
+        <td><input type="number" class="wp-calories" min="0" max="9999" step="50"  value="${d.caloriesTarget !== null && d.caloriesTarget !== undefined ? d.caloriesTarget : ''}" placeholder="—"></td>
+        <td><input type="number" class="wp-protein"  min="0" max="999"  step="1"   value="${d.proteinTarget  !== null && d.proteinTarget  !== undefined ? d.proteinTarget  : ''}" placeholder="—"></td>
+        <td><input type="number" class="wp-fat"      min="0" max="999"  step="1"   value="${d.fatTarget      !== null && d.fatTarget      !== undefined ? d.fatTarget      : ''}" placeholder="—"></td>
+        <td><input type="number" class="wp-carbs"    min="0" max="999"  step="1"   value="${d.carbsTarget    !== null && d.carbsTarget    !== undefined ? d.carbsTarget    : ''}" placeholder="—"></td>
+        <td><input type="number" class="wp-steps"    min="0" max="99999" step="500" value="${d.stepsTarget  !== null && d.stepsTarget    !== undefined ? d.stepsTarget    : ''}" placeholder="—"></td>
         <td><input type="text"   class="wp-training" maxlength="40"      value="${d.training || ''}" placeholder="e.g. Leg day"></td>
       `;
       tbody.appendChild(tr);
@@ -2714,15 +3519,19 @@ const CoachPage = {
       if (!State.profile.coach) return;
       const newPlan = {};
       tbody.querySelectorAll('tr[data-day]').forEach(tr => {
-        const day = tr.dataset.day;
-        const cal  = tr.querySelector('.wp-calories').value;
-        const prot = tr.querySelector('.wp-protein').value;
-        const step = tr.querySelector('.wp-steps').value;
+        const day   = tr.dataset.day;
+        const cal   = tr.querySelector('.wp-calories').value;
+        const prot  = tr.querySelector('.wp-protein').value;
+        const fat   = tr.querySelector('.wp-fat').value;
+        const carbs = tr.querySelector('.wp-carbs').value;
+        const step  = tr.querySelector('.wp-steps').value;
         const train = tr.querySelector('.wp-training').value.trim();
         newPlan[day] = {
-          caloriesTarget: cal  !== '' ? parseInt(cal)   : null,
-          proteinTarget:  prot !== '' ? parseInt(prot)  : null,
-          stepsTarget:    step !== '' ? parseInt(step)  : null,
+          caloriesTarget: cal   !== '' ? parseInt(cal)   : null,
+          proteinTarget:  prot  !== '' ? parseInt(prot)  : null,
+          fatTarget:      fat   !== '' ? parseInt(fat)   : null,
+          carbsTarget:    carbs !== '' ? parseInt(carbs) : null,
+          stepsTarget:    step  !== '' ? parseInt(step)  : null,
           training: train
         };
       });
@@ -2946,6 +3755,57 @@ const CoachPage = {
 };
 
 /* ============================================================
+   AUTH — Firebase Authentication (Google Sign-In)
+   ============================================================ */
+const Auth = {
+  /** Sign in with a Google popup. onAuthStateChanged handles the rest. */
+  async signInWithGoogle() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+      await firebase.auth().signInWithPopup(provider);
+    } catch (e) {
+      console.error('Sign-in error:', e);
+      UI.showToast('Sign-in failed. Please try again.', 'error');
+    }
+  },
+
+  /** Sign out. onAuthStateChanged hides the app and shows login. */
+  async signOut() {
+    await firebase.auth().signOut();
+  },
+
+  /** Show the full-screen login overlay. */
+  showLoginScreen() {
+    document.getElementById('auth-overlay').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+  },
+
+  /** Hide the login overlay. */
+  hideLoginScreen() {
+    document.getElementById('auth-overlay').classList.add('hidden');
+  },
+
+  /** Update the nav user display with name and avatar. */
+  updateNavUI(user) {
+    const avatarEl = document.getElementById('nav-user-avatar');
+    const nameEl   = document.getElementById('nav-user-name');
+    if (user) {
+      const firstName = user.displayName ? user.displayName.split(' ')[0] : (user.email || '');
+      nameEl.textContent = firstName;
+      if (user.photoURL) {
+        avatarEl.src = user.photoURL;
+        avatarEl.classList.remove('hidden');
+      } else {
+        avatarEl.classList.add('hidden');
+      }
+    } else {
+      nameEl.textContent = '';
+      avatarEl.classList.add('hidden');
+    }
+  }
+};
+
+/* ============================================================
    APP — bootstrap and initialization
    ============================================================ */
 const App = {
@@ -2962,16 +3822,31 @@ const App = {
     // Apply Chart.js dark defaults before any chart is created
     Charts.applyDefaults();
 
-    // Load persisted data from localStorage
-    Storage.load();
+    // Show login screen until Firebase confirms auth state
+    Auth.showLoginScreen();
 
-    if (Storage.isFirstLaunch()) {
-      // First ever visit — show setup wizard
-      Wizard.show();
-    } else {
-      // Returning user — offer to import a file, then start app
-      ImportPrompt.show();
-    }
+    // Firebase auth state observer — fires immediately on page load
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (user) {
+        // User is signed in — load their data from Firestore
+        Auth.hideLoginScreen();
+        Auth.updateNavUI(user);
+        await Storage.load();
+        if (Storage.isFirstLaunch()) {
+          Wizard.show();
+        } else {
+          App.start();
+        }
+      } else {
+        // User is signed out — show login screen and clear data
+        Auth.showLoginScreen();
+        Auth.updateNavUI(null);
+        // Wipe state so stale data is never shown if another account signs in later
+        State.entries = [];
+        State.photos  = [];
+        State.profile.name = ''; // enough for isFirstLaunch() to work if re-used
+      }
+    });
   }
 };
 

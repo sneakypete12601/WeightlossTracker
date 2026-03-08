@@ -942,6 +942,24 @@ select {
   width: auto;
 }
 
+#graphs-custom-range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+#graphs-custom-range input[type="date"] {
+  width: auto;
+  font-size: 0.875rem;
+  padding: 6px 10px;
+}
+
+.graphs-range-sep {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
 #charts-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -2114,4 +2132,573 @@ input[type="checkbox"] {
 @media (max-width: 480px) {
   .mvd-preset-fields { grid-template-columns: 1fr 1fr; }
   #target-metrics-row { gap: 0.75rem; }
+}
+
+/* ============================================================
+   25. SUMMARY PAGE — progress bar, mini charts, log CTA
+   ============================================================ */
+#summary-progress-section {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+#summary-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+}
+
+#summary-progress-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+#summary-progress-pct {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+#summary-progress-bar-track {
+  background: var(--color-bg-tertiary);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+  margin-bottom: var(--space-xs);
+}
+
+#summary-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80, #22c55e);
+  border-radius: 999px;
+  transition: width 0.6s ease;
+  min-width: 4px;
+}
+
+#summary-progress-endpoints {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+#summary-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+#summary-log-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+#summary-log-cta-text {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+}
+
+/* ============================================================
+   26. ENTRY PAGE — card-based form layout
+   ============================================================ */
+#entry-page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+#entry-page-header h2 {
+  margin-bottom: 0;
+}
+
+.entry-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.entry-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.entry-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.entry-card-icon {
+  font-size: 1.125rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.entry-card-optional {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.entry-card-header-collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.entry-card-header-collapsible:hover h3 {
+  color: var(--color-accent);
+}
+
+.entry-collapse-arrow {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
+  transition: transform var(--transition-fast);
+}
+
+.entry-card-body.collapsed {
+  display: none;
+}
+
+/* Hero section: date + weight + steps */
+.entry-card-hero {
+  background: linear-gradient(135deg, rgba(74,222,128,0.06), rgba(96,165,250,0.06));
+  border-color: var(--color-accent);
+}
+
+.entry-hero-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr 1fr;
+  gap: var(--space-md);
+  align-items: end;
+  margin-bottom: var(--space-md);
+}
+
+.entry-hero-weight .entry-weight-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.entry-hero-weight input[type="number"] {
+  font-size: 1.5rem;
+  font-weight: 700;
+  padding-right: 2.5rem;
+  height: 56px;
+  border-color: var(--color-accent);
+}
+
+.entry-weight-unit {
+  position: absolute;
+  right: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  pointer-events: none;
+}
+
+.entry-computed-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.entry-computed-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-md);
+  min-width: 90px;
+}
+
+.entry-computed-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.entry-computed-value {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.entry-computed-value.negative {
+  color: var(--color-danger);
+}
+
+.entry-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  padding-top: var(--space-sm);
+}
+
+.btn-lg {
+  padding: var(--space-md) var(--space-2xl);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* Coach targets card on entry page */
+#entry-coach-targets-card {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+}
+
+#entry-coach-targets-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.coach-target-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-md);
+  min-width: 100px;
+}
+
+.coach-target-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+}
+
+.coach-target-val {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+/* Chart card subtitle */
+.chart-card-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: -8px;
+  margin-bottom: 4px;
+}
+
+/* ============================================================
+   FORM LOCK — entry form locked state (existing entry loaded)
+   ============================================================ */
+form#daily-entry-form.form-locked input:not(#entry-date),
+form#daily-entry-form.form-locked textarea,
+form#daily-entry-form.form-locked select,
+form#daily-entry-form.form-locked button.adherence-btn,
+form#daily-entry-form.form-locked button.adherence-tag,
+form#daily-entry-form.form-locked button.lift-btn,
+form#daily-entry-form.form-locked input[type="range"] {
+  pointer-events: none;
+  opacity: 0.58;
+  cursor: default;
+}
+
+/* ============================================================
+   LIFTING DAY BUTTONS
+   ============================================================ */
+.entry-hero-lifting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lift-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.lift-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-input);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.lift-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.lift-btn.active[data-lift="yes"] {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.lift-btn.active[data-lift="no"] {
+  background: rgba(107, 114, 128, 0.15);
+  border-color: #6b7280;
+  color: #9ca3af;
+}
+
+/* Edit Entry button (primary style) */
+#entry-edit-btn {
+  min-width: 140px;
+}
+
+/* ============================================================
+   GOAL TIMELINE — summary page
+   ============================================================ */
+#goal-timeline-section {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.goal-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.goal-timeline-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text-primary);
+}
+
+.goal-timeline-rate {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 2px 10px;
+  border-radius: 99px;
+}
+
+.goal-timeline-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+}
+
+.goal-stat {
+  text-align: center;
+  background: var(--color-bg-input);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+}
+
+.goal-stat-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.goal-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.goal-stat-unit {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ============================================================
+   PLATEAU SUGGESTIONS
+   ============================================================ */
+.plateau-suggestions {
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+}
+
+.plateau-suggestions li {
+  margin-bottom: 2px;
+  font-size: 0.875rem;
+}
+
+/* Responsive — entry hero on narrow screens */
+@media (max-width: 640px) {
+  .entry-hero-row {
+    grid-template-columns: 1fr;
+  }
+
+  .entry-hero-weight input[type="number"] {
+    font-size: 1.25rem;
+    height: 48px;
+  }
+
+  .entry-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .entry-form-actions .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  #summary-log-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #summary-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   AUTH OVERLAY — full-screen login card
+   ============================================================ */
+#auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+#auth-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 3rem 2.5rem;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+
+#auth-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.auth-logo-icon {
+  font-size: 1.75rem;
+  color: var(--accent);
+}
+
+.auth-logo-text {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+#auth-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+}
+
+#auth-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 2rem;
+  line-height: 1.5;
+}
+
+#auth-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  background: #fff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+#auth-google-btn:hover {
+  background: #f8f8f8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+#auth-google-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+#auth-privacy {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 1.25rem 0 0;
+}
+
+/* ============================================================
+   NAV USER DISPLAY
+   ============================================================ */
+#nav-user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+#nav-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+}
+
+#nav-user-name {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  #nav-user {
+    display: none;
+  }
 }
