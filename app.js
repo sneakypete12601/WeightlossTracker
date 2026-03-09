@@ -310,17 +310,18 @@ const Storage = {
     // Lifting days
     const liftingDays = entries.filter(e => e.liftingDay === true).length;
 
-    // Coach targets
+    // Coach targets (weeklyPlan is an object keyed by day name)
     const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const plan = p.coach?.weeklyPlan || [];
-    const coachLines = plan.map((d, i) => {
+    const weeklyPlan = p.coach?.weeklyPlan || {};
+    const coachLines = dayNames.map(day => {
+      const d = weeklyPlan[day];
       if (!d || (!d.caloriesTarget && !d.stepsTarget && !d.training)) return null;
       const parts = [];
       if (d.caloriesTarget) parts.push(`${d.caloriesTarget} kcal`);
       if (d.proteinTarget)  parts.push(`${d.proteinTarget}g protein`);
       if (d.stepsTarget)    parts.push(`${d.stepsTarget.toLocaleString()} steps`);
       if (d.training)       parts.push(`training: ${d.training}`);
-      return `  ${dayNames[i]}: ${parts.join(', ')}`;
+      return `  ${day}: ${parts.join(', ')}`;
     }).filter(Boolean);
 
     // ── Recent entries table (last 60 days) ──
