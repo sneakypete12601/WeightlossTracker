@@ -388,19 +388,44 @@ const Storage = {
       'Please provide a thorough analysis covering: overall progress vs my goal, nutrition patterns (calories, protein, macros), step count trends, adherence patterns, any plateaus or concerning trends, what I am doing well, and specific actionable suggestions to improve my results.',
     ].filter(l => l !== null).join('\n');
 
-    navigator.clipboard.writeText(lines).then(() => {
-      UI.showToast('Copied! Paste into claude.ai and ask away.', 'success');
-    }).catch(() => {
-      // Fallback: open a textarea for manual copy
+    const doCopy = (text) => {
+      // Modern clipboard API
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+          UI.showToast('Copied! Paste into claude.ai and ask away.', 'success');
+        }).catch(() => legacyCopy(text));
+      } else {
+        legacyCopy(text);
+      }
+    };
+
+    const legacyCopy = (text) => {
       const ta = document.createElement('textarea');
-      ta.value = lines;
-      ta.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;font-size:0.8rem;padding:1rem;';
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
       document.body.appendChild(ta);
       ta.focus();
       ta.select();
-      UI.showToast('Clipboard unavailable — select all and copy manually.', 'warning');
-      ta.addEventListener('keydown', e => { if (e.key === 'Escape') ta.remove(); });
-    });
+      try {
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) {
+          UI.showToast('Copied! Paste into claude.ai and ask away.', 'success');
+        } else {
+          UI.showToast('Copy failed — try using Chrome or Firefox.', 'error');
+        }
+      } catch (err) {
+        document.body.removeChild(ta);
+        UI.showToast('Copy failed — try using Chrome or Firefox.', 'error');
+      }
+    };
+
+    try {
+      doCopy(lines);
+    } catch (e) {
+      console.error('copyForClaude error:', e);
+      UI.showToast(`Copy failed: ${e.message}`, 'error');
+    }
   },
 
   /** Export all entries as a downloadable CSV file. */
