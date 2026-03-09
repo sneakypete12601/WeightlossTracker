@@ -252,6 +252,157 @@ const Storage = {
     UI.showToast('Data exported successfully!', 'success');
   },
 
+  /** Format all data as a structured Claude prompt and copy to clipboard. */
+  copyForClaude() {
+    const p       = State.profile;
+    const entries = Entries.getSorted(); // oldest → newest
+
+    if (entries.length === 0) {
+      UI.showToast('No entries to copy yet.', 'info');
+      return;
+    }
+
+    const latest  = entries[entries.length - 1];
+    const today   = new Date().toISOString().slice(0, 10);
+
+    // ── Profile & goals ──
+    let age = '';
+    if (p.dob) {
+      const ms = Date.now() - new Date(p.dob).getTime();
+      age = Math.floor(ms / (365.25 * 24 * 3600 * 1000)) + ' years old';
+    }
+    const startDate  = p.journeyStartDate || entries[0].date;
+    const daysIn     = Math.round((new Date(today) - new Date(startDate)) / 86400000);
+    const totalLost  = latest.totalKgLost ?? 0;
+    const pctLost    = latest.totalPctLost ?? 0;
+    const currentBMI = latest.bmi ?? null;
+
+    // ── Averages over all entries with data ──
+    const avg = (arr) => {
+      const vals = arr.filter(v => v !== null && v !== undefined);
+      return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+    };
+    const fmt = (v, dp = 1) => v !== null ? v.toFixed(dp) : '—';
+    const fmtN = (v) => v !== null && v !== undefined ? Math.round(v).toLocaleString() : '—';
+
+    const avgCalories = avg(entries.map(e => e.caloriesKcal));
+    const avgProtein  = avg(entries.map(e => e.proteinG));
+    const avgCarbs    = avg(entries.map(e => e.carbsG));
+    const avgFat      = avg(entries.map(e => e.fatG));
+    const avgSodium   = avg(entries.map(e => e.sodiumMg));
+    const avgSteps    = avg(entries.map(e => e.stepsCount));
+    const avgSleep    = avg(entries.map(e => e.sleepHours));
+
+    // Weekly kg lost
+    const weeklyRates = [];
+    for (let i = 7; i < entries.length; i++) {
+      const diff = (entries[i].weightKg || 0) - (entries[i - 7].weightKg || 0);
+      weeklyRates.push(diff);
+    }
+    const avgWeeklyLoss = weeklyRates.length ? avg(weeklyRates) : null;
+
+    // Adherence breakdown
+    const adh = entries.map(e => e.adherenceScore).filter(Boolean);
+    const adhCounts = { on_plan: 0, close: 0, off_plan: 0 };
+    adh.forEach(a => { if (adhCounts[a] !== undefined) adhCounts[a]++; });
+    const adhTotal = adh.length || 1;
+
+    // Lifting days
+    const liftingDays = entries.filter(e => e.liftingDay === true).length;
+
+    // Coach targets
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const plan = p.coach?.weeklyPlan || [];
+    const coachLines = plan.map((d, i) => {
+      if (!d || (!d.caloriesTarget && !d.stepsTarget && !d.training)) return null;
+      const parts = [];
+      if (d.caloriesTarget) parts.push(`${d.caloriesTarget} kcal`);
+      if (d.proteinTarget)  parts.push(`${d.proteinTarget}g protein`);
+      if (d.stepsTarget)    parts.push(`${d.stepsTarget.toLocaleString()} steps`);
+      if (d.training)       parts.push(`training: ${d.training}`);
+      return `  ${dayNames[i]}: ${parts.join(', ')}`;
+    }).filter(Boolean);
+
+    // ── Recent entries table (last 60 days) ──
+    const recent = entries.slice(-60);
+    const tableHeader = 'Date       | Weight(kg) | Cal  | Prot | Carbs | Fat | Na    | Steps | Sleep | Hunger | Energy | Adherence       | Lifting';
+    const tableDivider = '-'.repeat(tableHeader.length);
+    const tableRows = recent.map(e => {
+      const adScore = { on_plan: 'On Plan', close: 'Close', off_plan: 'Off Plan' }[e.adherenceScore] || '—';
+      return [
+        e.date,
+        fmt(e.weightKg, 1).padStart(10),
+        String(e.caloriesKcal ?? '—').padStart(5),
+        String(e.proteinG   ?? '—').padStart(5),
+        String(e.carbsG     ?? '—').padStart(6),
+        String(e.fatG       ?? '—').padStart(4),
+        String(e.sodiumMg   ?? '—').padStart(6),
+        fmtN(e.stepsCount).padStart(6),
+        String(e.sleepHours ?? '—').padStart(6),
+        String(e.hungerLevel ?? '—').padStart(7),
+        String(e.energyLevel ?? '—').padStart(7),
+        adScore.padStart(16),
+        (e.liftingDay === true ? 'Yes' : e.liftingDay === false ? 'No' : '—').padStart(8),
+      ].join(' | ');
+    });
+
+    // ── Assemble the full prompt ──
+    const lines = [
+      'I use a weight loss tracking app and want you to analyse my data. Here is everything:',
+      '',
+      '## MY PROFILE',
+      `Name: ${p.name || 'Not set'}`,
+      age ? `Age: ${age}` : '',
+      `Height: ${p.heightCm ? p.heightCm + ' cm' : '—'}`,
+      `Journey start: ${startDate} (${daysIn} days ago)`,
+      `Starting weight: ${p.startingWeightKg ? p.startingWeightKg + ' kg' : '—'}`,
+      `Goal weight: ${p.goalWeightKg ? p.goalWeightKg + ' kg' : '—'}`,
+      `Weekly loss goal: ${p.weeklyGoalKg ? p.weeklyGoalKg + ' kg/week' : '—'}`,
+      '',
+      '## CURRENT PROGRESS',
+      `Current weight: ${fmt(latest.weightKg, 1)} kg`,
+      `Total lost: ${fmt(Math.abs(totalLost), 2)} kg (${fmt(Math.abs(pctLost), 1)}% of start)`,
+      currentBMI ? `Current BMI: ${fmt(currentBMI, 1)}` : '',
+      avgWeeklyLoss !== null ? `Average weekly loss: ${fmt(Math.abs(avgWeeklyLoss), 2)} kg/week` : '',
+      '',
+      '## COACH TARGETS (per day of week)',
+      coachLines.length ? coachLines.join('\n') : '  Not configured',
+      '',
+      '## AVERAGES (all-time)',
+      `Calories:    ${fmt(avgCalories, 0)} kcal/day`,
+      `Protein:     ${fmt(avgProtein, 1)} g/day`,
+      `Carbs:       ${fmt(avgCarbs, 1)} g/day`,
+      `Fat:         ${fmt(avgFat, 1)} g/day`,
+      `Sodium:      ${fmtN(avgSodium)} mg/day`,
+      `Steps:       ${fmtN(avgSteps)}/day`,
+      avgSleep !== null ? `Sleep:       ${fmt(avgSleep, 1)} hrs/night` : '',
+      `Lifting days: ${liftingDays} of ${entries.length} logged days`,
+      `Adherence:   On Plan ${Math.round(adhCounts.on_plan / adhTotal * 100)}% | Close ${Math.round(adhCounts.close / adhTotal * 100)}% | Off Plan ${Math.round(adhCounts.off_plan / adhTotal * 100)}%`,
+      '',
+      `## ENTRY LOG (last ${recent.length} days)`,
+      tableHeader,
+      tableDivider,
+      ...tableRows,
+      '',
+      '---',
+      'Please provide a thorough analysis covering: overall progress vs my goal, nutrition patterns (calories, protein, macros), step count trends, adherence patterns, any plateaus or concerning trends, what I am doing well, and specific actionable suggestions to improve my results.',
+    ].filter(l => l !== null).join('\n');
+
+    navigator.clipboard.writeText(lines).then(() => {
+      UI.showToast('Copied! Paste into claude.ai and ask away.', 'success');
+    }).catch(() => {
+      // Fallback: open a textarea for manual copy
+      const ta = document.createElement('textarea');
+      ta.value = lines;
+      ta.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;font-size:0.8rem;padding:1rem;';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      UI.showToast('Clipboard unavailable — select all and copy manually.', 'warning');
+      ta.addEventListener('keydown', e => { if (e.key === 'Escape') ta.remove(); });
+    });
+  },
+
   /** Export all entries as a downloadable CSV file. */
   exportCSV() {
     const entries = Entries.getSorted();
@@ -1152,6 +1303,12 @@ const Nav = {
     if (exportCsvNav) exportCsvNav.addEventListener('click', () => Storage.exportCSV());
     const exportCsvDrawer = document.getElementById('btn-export-csv-drawer');
     if (exportCsvDrawer) exportCsvDrawer.addEventListener('click', () => Storage.exportCSV());
+
+    // Copy for Claude buttons
+    const copyClaudeNav = document.getElementById('btn-copy-claude-nav');
+    if (copyClaudeNav) copyClaudeNav.addEventListener('click', () => Storage.copyForClaude());
+    const copyClaudeDrawer = document.getElementById('btn-copy-claude-drawer');
+    if (copyClaudeDrawer) copyClaudeDrawer.addEventListener('click', () => Storage.copyForClaude());
 
     // Import buttons (nav)
     const importNav = document.getElementById('btn-import-nav');
