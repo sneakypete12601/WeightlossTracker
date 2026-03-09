@@ -74,10 +74,11 @@ const State = {
    STORAGE — localStorage read/write + JSON file I/O
    ============================================================ */
 const Storage = {
-  /** Firestore document reference for current user's data. */
+  /** Firestore document reference for current user's data. Throws if not signed in. */
   _docRef() {
-    const uid = firebase.auth().currentUser.uid;
-    return firebase.firestore().doc(`users/${uid}/data`);
+    const user = firebase.auth().currentUser;
+    if (!user) throw new Error('Not signed in');
+    return firebase.firestore().doc(`users/${user.uid}/data`);
   },
 
   /** localStorage cache key for current user (keeps data per-user). */
@@ -179,18 +180,26 @@ const Storage = {
   /** Persist current State to Firestore + localStorage cache (fire-and-forget).
    *  Photos are stored in localStorage only (Firestore 1 MB doc limit). */
   save() {
+    const data = { profile: State.profile, entries: State.entries };
+
+    // 1. localStorage cache — always attempted first, independently
+    try { localStorage.setItem(Storage._cacheKey(), JSON.stringify(data)); } catch (_) {}
+
+    // 2. Photos → localStorage — always attempted, independently of Firestore
     try {
-      const data = { profile: State.profile, entries: State.entries };
-      // Always write to localStorage cache first (instant, always works)
-      try { localStorage.setItem(Storage._cacheKey(), JSON.stringify(data)); } catch (_) {}
-      // Then sync to Firestore (cloud — may fail if rules not configured)
+      localStorage.setItem('weightTrackerPhotos', JSON.stringify(State.photos));
+    } catch (quotaErr) {
+      console.warn('localStorage quota exceeded saving photos:', quotaErr.message);
+      UI.showToast('Photo storage is full. Remove old photos to free space.', 'error');
+    }
+
+    // 3. Firestore sync — isolated so any error never blocks the above saves
+    try {
       Storage._docRef().set(data).catch(e => {
         console.warn('Firestore save failed (data is safe in local cache):', e.message);
       });
-      // Photos → localStorage
-      try { localStorage.setItem('weightTrackerPhotos', JSON.stringify(State.photos)); } catch (_) {}
     } catch (e) {
-      console.error('Storage.save error:', e);
+      console.warn('Firestore _docRef failed:', e.message);
     }
   },
 
@@ -3565,6 +3574,7 @@ const Profile = {
       weeklyGoalKg: weeklyGoalKg,
       travelMode: travelEnabled,
       maintenanceCalories: maintCal,
+      notificationsEnabled: State.profile.notificationsEnabled || false,
       mvdPresets: State.profile.mvdPresets || [
         {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
         {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},

@@ -434,23 +434,33 @@
 
         <form id="daily-entry-form" novalidate>
 
-          <!-- Hero row: date, weight, steps, lifting day -->
-          <div class="entry-hero-row">
+          <!-- Date row -->
+          <div class="entry-date-bar">
             <div class="form-group">
               <label for="entry-date">Date</label>
               <input type="date" id="entry-date" required>
             </div>
-            <div class="form-group">
-              <label for="entry-weight">Weight (kg) <span class="required">*</span></label>
-              <input type="number" id="entry-weight" placeholder="e.g. 95.4" min="30" max="400" step="0.1">
+          </div>
+
+          <!-- Big metric inputs: Weight · Steps · Lifting Day -->
+          <div class="entry-big-row">
+            <div class="entry-metric-panel entry-metric-weight">
+              <div class="entry-metric-label">Weight <span class="required">*</span></div>
+              <div class="entry-metric-input-wrap">
+                <input type="number" id="entry-weight" class="entry-big-input" placeholder="0.0" min="30" max="400" step="0.1" inputmode="decimal">
+              </div>
+              <div class="entry-metric-unit">kg</div>
             </div>
-            <div class="form-group">
-              <label for="entry-steps">Steps</label>
-              <input type="number" id="entry-steps" placeholder="e.g. 8500" min="0" max="100000" step="1">
+            <div class="entry-metric-panel entry-metric-steps">
+              <div class="entry-metric-label">Steps</div>
+              <div class="entry-metric-input-wrap">
+                <input type="number" id="entry-steps" class="entry-big-input" placeholder="0" min="0" max="100000" step="1" inputmode="numeric">
+              </div>
+              <div class="entry-metric-unit">steps</div>
             </div>
-            <div class="form-group">
-              <label>Lifting Day?</label>
-              <div class="lift-btns">
+            <div class="entry-metric-panel entry-metric-lifting">
+              <div class="entry-metric-label">Lifting Day?</div>
+              <div class="lift-btns lift-btns-large">
                 <button type="button" class="lift-btn" data-lift="yes">Yes</button>
                 <button type="button" class="lift-btn" data-lift="no">No</button>
               </div>
@@ -478,36 +488,36 @@
             </div>
           </div>
 
-          <!-- Nutrition card -->
-          <div class="entry-card card">
-            <div class="entry-card-header-collapsible" data-target="entry-nutrition-body">
-              <h3>Nutrition <span class="entry-collapse-arrow">&#9660;</span></h3>
+          <!-- Nutrition card — always open -->
+          <div class="entry-card card entry-nutrition-card">
+            <h3 class="entry-nutrition-title">Nutrition</h3>
+            <!-- Calories — prominent -->
+            <div class="entry-calorie-row">
+              <label class="entry-calorie-label" for="entry-calories">Calories</label>
+              <div class="entry-calorie-input-wrap">
+                <input type="number" id="entry-calories" class="entry-calorie-input" placeholder="0" min="0" max="10000" inputmode="numeric">
+                <span class="entry-calorie-unit">kcal</span>
+              </div>
             </div>
-            <div id="entry-nutrition-body">
-              <div class="form-grid-2">
-                <div class="form-group">
-                  <label for="entry-calories">Calorie Intake (kcal)</label>
-                  <input type="number" id="entry-calories" placeholder="e.g. 1800" min="0" max="10000">
-                </div>
-                <div class="form-group">
-                  <label for="entry-sodium">Sodium (mg)</label>
-                  <input type="number" id="entry-sodium" placeholder="e.g. 2000" min="0" max="20000">
-                </div>
+            <!-- Macros row -->
+            <div class="form-grid-3">
+              <div class="form-group">
+                <label for="entry-protein">Protein (g)</label>
+                <input type="number" id="entry-protein" placeholder="e.g. 150" min="0" max="1000" step="0.1" inputmode="decimal">
               </div>
-              <div class="form-grid-3">
-                <div class="form-group">
-                  <label for="entry-protein">Protein (g)</label>
-                  <input type="number" id="entry-protein" placeholder="e.g. 150" min="0" max="1000" step="0.1">
-                </div>
-                <div class="form-group">
-                  <label for="entry-carbs">Carbohydrates (g)</label>
-                  <input type="number" id="entry-carbs" placeholder="e.g. 200" min="0" max="2000" step="0.1">
-                </div>
-                <div class="form-group">
-                  <label for="entry-fat">Fat (g)</label>
-                  <input type="number" id="entry-fat" placeholder="e.g. 60" min="0" max="500" step="0.1">
-                </div>
+              <div class="form-group">
+                <label for="entry-carbs">Carbs (g)</label>
+                <input type="number" id="entry-carbs" placeholder="e.g. 200" min="0" max="2000" step="0.1" inputmode="decimal">
               </div>
+              <div class="form-group">
+                <label for="entry-fat">Fat (g)</label>
+                <input type="number" id="entry-fat" placeholder="e.g. 60" min="0" max="500" step="0.1" inputmode="decimal">
+              </div>
+            </div>
+            <!-- Sodium -->
+            <div class="form-group">
+              <label for="entry-sodium">Sodium (mg)</label>
+              <input type="number" id="entry-sodium" placeholder="e.g. 2000" min="0" max="20000" inputmode="numeric">
             </div>
           </div>
 
