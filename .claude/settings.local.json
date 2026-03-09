@@ -5,7 +5,9 @@
       "Read(//c/Users/peter/.claude/projects/c--Users-peter-Documents-GitHub-WeightlossTracker/**)",
       "Bash(python3:*)",
       "Read(//tmp/**)",
-      "Read(//<!DOCTYPE html>/ && /**)"
+      "Read(//<!DOCTYPE html>/ && /**)",
+      "Read(//c/Users/peter/Documents/GitHub/**)",
+      "Bash(sw. \")"
     ],
     "additionalDirectories": [
       "C:\\Users\\peter\\.claude\\projects\\c--Users-peter-Documents-GitHub-WeightlossTracker\\16c143f0-0731-431e-8a5f-df2baaa13c90\\tool-results"

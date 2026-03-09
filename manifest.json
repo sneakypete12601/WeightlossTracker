@@ -1,0 +1,17 @@
+{
+  "name": "Forge Protocol",
+  "short_name": "Forge",
+  "description": "Your personal weight loss and fitness tracker.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#ef4444",
+  "icons": [
+    {
+      "src": "forgeprotocol%20logo%20icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -2697,3 +2697,150 @@ form#daily-entry-form.form-locked input[type="range"] {
     display: none;
   }
 }
+
+/* ============================================================
+   WEEKLY DEFICIT CARD
+   ============================================================ */
+.weekly-deficit-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+.weekly-deficit-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 160px;
+}
+.weekly-deficit-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+.weekly-deficit-sub {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ============================================================
+   HEATMAP CALENDAR
+   ============================================================ */
+.card-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-sm);
+}
+#heatmap-card {
+  overflow-x: auto;
+}
+.heatmap-month-labels {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 2px;
+  padding-left: 0;
+}
+.heatmap-month-label {
+  width: 13px;
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+  text-align: left;
+  white-space: nowrap;
+  overflow: visible;
+}
+.heatmap-grid {
+  display: flex;
+  gap: 3px;
+}
+.heatmap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.heatmap-cell {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+.heatmap-cell:hover { opacity: 0.75; }
+.heatmap-future      { background: var(--color-bg-tertiary); cursor: default; opacity: 0.3; }
+.heatmap-level-0     { background: var(--color-bg-tertiary); }
+.heatmap-level-1     { background: rgba(239,68,68,0.25); }
+.heatmap-level-2     { background: rgba(239,68,68,0.45); }
+.heatmap-level-3     { background: rgba(239,68,68,0.7); }
+.heatmap-level-4     { background: #ef4444; }
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: var(--space-sm);
+}
+.heatmap-legend-label {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  margin: 0 4px;
+}
+
+/* ============================================================
+   WEEKLY SUMMARY CARD
+   ============================================================ */
+#weekly-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: var(--space-sm);
+}
+.wsv-stat {
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  text-align: center;
+}
+.wsv-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.wsv-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.wsv-sub {
+  font-size: 0.75rem;
+  min-height: 1em;
+}
+.wsv-delta { font-weight: 600; }
+.wsv-delta.good    { color: #4ade80; }
+.wsv-delta.bad     { color: #f87171; }
+.wsv-delta.neutral { color: var(--color-text-muted); }
+
+/* ============================================================
+   PHOTO WEIGHT BADGE
+   ============================================================ */
+.photo-session-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 2px;
+}
+.photo-weight-badge {
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}

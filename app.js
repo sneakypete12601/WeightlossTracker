@@ -141,6 +141,7 @@ const Storage = {
       if (State.profile.travelMode === undefined) State.profile.travelMode = false;
       if (State.profile.maintenanceCalories === undefined) State.profile.maintenanceCalories = null;
       if (State.profile.weeklyGoalKg === undefined) State.profile.weeklyGoalKg = null;
+      if (State.profile.notificationsEnabled === undefined) State.profile.notificationsEnabled = false;
       if (!State.profile.mvdPresets) {
         State.profile.mvdPresets = [
           {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
@@ -218,6 +219,43 @@ const Storage = {
     UI.showToast('Data exported successfully!', 'success');
   },
 
+  /** Export all entries as a downloadable CSV file. */
+  exportCSV() {
+    const entries = Entries.getSorted();
+    if (entries.length === 0) { UI.showToast('No entries to export.', 'info'); return; }
+
+    const headers = [
+      'date','weightKg','kgLostFromPrev','totalKgLost','totalPctLost','bmi',
+      'caloriesKcal','proteinG','carbsG','fatG','sodiumMg',
+      'waistCm','bicepCm','thighCm','stepsCount','sleepHours',
+      'alcoholDrinks','hungerLevel','energyLevel','adherenceScore','adherenceWhy',
+      'nsv','coachNotes','liftingDay'
+    ];
+
+    const escape = v => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return (s.includes(',') || s.includes('"') || s.includes('\n'))
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const rows = [headers.join(',')];
+    entries.forEach(e => rows.push(headers.map(h => escape(e[h])).join(',')));
+
+    const csv  = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href     = url;
+    a.download = `forge-protocol-export-${dateStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    UI.showToast('CSV exported successfully!', 'success');
+  },
+
   /**
    * Import data from a JSON file. Replaces State entirely.
    * @param {File} file
@@ -265,6 +303,7 @@ const Storage = {
         if (State.profile.travelMode === undefined) State.profile.travelMode = false;
         if (State.profile.maintenanceCalories === undefined) State.profile.maintenanceCalories = null;
         if (State.profile.weeklyGoalKg === undefined) State.profile.weeklyGoalKg = null;
+        if (State.profile.notificationsEnabled === undefined) State.profile.notificationsEnabled = false;
         if (!State.profile.mvdPresets) {
           State.profile.mvdPresets = [
             {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
@@ -412,6 +451,44 @@ const Computed = {
     const todayEntry = sorted.find(e => e.date === UI.todayISO());
     const todayPoints = todayEntry ? Computed.calcPoints(todayEntry) : null;
 
+    // Weekly calorie deficit (Mon–today) — requires coach plan with calorie targets
+    let weeklyDeficit = null;
+    let weeklyDeficitTarget = null;
+    if (Coach.isEnabled()) {
+      const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+      const todayISO = UI.todayISO();
+      const [ty, tm, td] = todayISO.split('-').map(Number);
+      const todayDate = new Date(ty, tm - 1, td);
+      const daysFromMon = (todayDate.getDay() === 0) ? 6 : todayDate.getDay() - 1;
+      const monDate = new Date(todayDate);
+      monDate.setDate(monDate.getDate() - daysFromMon);
+
+      let totalDeficit = 0;
+      let totalTarget  = 0;
+      let daysWithTarget = 0;
+
+      const cur = new Date(monDate);
+      while (true) {
+        const yy = cur.getFullYear(), mm = String(cur.getMonth()+1).padStart(2,'0'), dd = String(cur.getDate()).padStart(2,'0');
+        const curISO = `${yy}-${mm}-${dd}`;
+        if (curISO > todayISO) break;
+        const plan = State.profile.coach?.weeklyPlan?.[dayNames[cur.getDay()]];
+        if (plan?.caloriesTarget) {
+          totalTarget += plan.caloriesTarget;
+          const entry = Entries.getById(curISO);
+          if (entry && entry.caloriesKcal !== null && entry.caloriesKcal !== undefined) {
+            totalDeficit += plan.caloriesTarget - entry.caloriesKcal;
+          }
+          daysWithTarget++;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+      if (daysWithTarget > 0) {
+        weeklyDeficit = Math.round(totalDeficit);
+        weeklyDeficitTarget = Math.round(totalTarget);
+      }
+    }
+
     return {
       currentWeight:  latest.weightKg,
       totalKgLost:    latest.totalKgLost,
@@ -424,7 +501,9 @@ const Computed = {
       latestStepsKm,
       trendWeight,
       sevenDayAvgLoss,
-      todayPoints
+      todayPoints,
+      weeklyDeficit,
+      weeklyDeficitTarget
     };
   },
 
@@ -1030,6 +1109,12 @@ const Nav = {
     const exportDrawer = document.getElementById('btn-export-drawer');
     if (exportDrawer) exportDrawer.addEventListener('click', () => Storage.exportJSON());
 
+    // CSV export buttons
+    const exportCsvNav = document.getElementById('btn-export-csv-nav');
+    if (exportCsvNav) exportCsvNav.addEventListener('click', () => Storage.exportCSV());
+    const exportCsvDrawer = document.getElementById('btn-export-csv-drawer');
+    if (exportCsvDrawer) exportCsvDrawer.addEventListener('click', () => Storage.exportCSV());
+
     // Import buttons (nav)
     const importNav = document.getElementById('btn-import-nav');
     const importNavFile = document.getElementById('nav-import-file-input');
@@ -1268,6 +1353,8 @@ const Dashboard = {
     Dashboard._renderProgressBar();
     Dashboard._renderGoalTimeline();
     Dashboard._renderMiniCharts();
+    Dashboard._renderHeatmap();
+    Dashboard._renderWeeklySummary();
     Dashboard._renderLogCTA();
   },
 
@@ -1516,6 +1603,21 @@ const Dashboard = {
     set('stat-today-points',
       stats.todayPoints !== null ? `${stats.todayPoints} / 5` : '—');
 
+    // Weekly deficit card
+    const deficitCard = document.getElementById('weekly-deficit-card');
+    if (deficitCard) {
+      if (stats.weeklyDeficit !== null) {
+        deficitCard.classList.remove('hidden');
+        set('stat-weekly-deficit', stats.weeklyDeficit >= 0
+          ? `+${stats.weeklyDeficit.toLocaleString()}`
+          : stats.weeklyDeficit.toLocaleString());
+        set('stat-weekly-deficit-target',
+          `vs ${stats.weeklyDeficitTarget.toLocaleString()} kcal target this week`);
+      } else {
+        deficitCard.classList.add('hidden');
+      }
+    }
+
     Dashboard._renderRetentionFlags();
   },
 
@@ -1630,6 +1732,209 @@ const Dashboard = {
         options: Charts._miniConfig('steps')
       });
     }
+  },
+
+  /** Render a GitHub-style activity heatmap for the last 365 days. */
+  _renderHeatmap() {
+    const container = document.getElementById('heatmap-container');
+    if (!container) return;
+
+    // Build a set of entries keyed by date for O(1) lookup
+    const entryMap = {};
+    State.entries.forEach(e => { entryMap[e.date] = e; });
+
+    // Compute start: beginning of the week (Mon) containing today - 51 weeks ago
+    const today = UI.todayISO();
+    const [ty, tm, td] = today.split('-').map(Number);
+    const todayDate = new Date(ty, tm - 1, td);
+    const todayDow = todayDate.getDay(); // 0=Sun
+    const daysFromMon = (todayDow === 0) ? 6 : todayDow - 1;
+
+    // Start from 52 weeks ago, aligned to Monday
+    const startDate = new Date(todayDate);
+    startDate.setDate(startDate.getDate() - daysFromMon - 51 * 7);
+
+    // Build 52 columns × 7 rows
+    const weeks = [];
+    let cur = new Date(startDate);
+    for (let w = 0; w < 52; w++) {
+      const week = [];
+      for (let d = 0; d < 7; d++) {
+        const yy = cur.getFullYear();
+        const mm = String(cur.getMonth()+1).padStart(2,'0');
+        const dd = String(cur.getDate()).padStart(2,'0');
+        const iso = `${yy}-${mm}-${dd}`;
+        week.push({ iso, inFuture: iso > today });
+        cur.setDate(cur.getDate() + 1);
+      }
+      weeks.push(week);
+    }
+
+    // Calculate month labels (show abbreviated month name at the start of each month)
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthLabels = weeks.map(week => {
+      const firstDay = week[0];
+      if (!firstDay.inFuture) {
+        const [y, m] = firstDay.iso.split('-').map(Number);
+        // Only show label if this is the first week of the month
+        const prevISO = `${y}-${String(m).padStart(2,'0')}-01`;
+        if (firstDay.iso <= prevISO && week[6].iso >= prevISO) {
+          return monthNames[m - 1];
+        }
+      }
+      return '';
+    });
+
+    // Build HTML
+    let html = '<div class="heatmap-month-labels">';
+    monthLabels.forEach(label => {
+      html += `<div class="heatmap-month-label">${label}</div>`;
+    });
+    html += '</div>';
+    html += '<div class="heatmap-grid">';
+
+    weeks.forEach((week) => {
+      html += '<div class="heatmap-col">';
+      week.forEach(({ iso, inFuture }) => {
+        if (inFuture) {
+          html += `<div class="heatmap-cell heatmap-future" title="${iso}"></div>`;
+        } else {
+          const entry = entryMap[iso];
+          let level = 0;
+          if (entry) {
+            const pts = Computed.calcPoints(entry);
+            if (pts >= 4)      level = 4;
+            else if (pts >= 2) level = 3;
+            else if (pts >= 1) level = 2;
+            else               level = 1; // has entry but 0 pts (e.g. no coach targets)
+          }
+          const title = entry
+            ? `${UI.formatDate(iso)}: ${entry.weightKg ? entry.weightKg + ' kg' : 'logged'}`
+            : iso;
+          html += `<div class="heatmap-cell heatmap-level-${level}" data-date="${iso}" title="${title}"></div>`;
+        }
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="heatmap-legend"><span class="heatmap-legend-label">Less</span>';
+    for (let i = 0; i <= 4; i++) {
+      html += `<div class="heatmap-cell heatmap-level-${i}"></div>`;
+    }
+    html += '<span class="heatmap-legend-label">More</span></div>';
+
+    container.innerHTML = html;
+
+    // Click to navigate to Log Entry for that date
+    container.querySelectorAll('.heatmap-cell[data-date]').forEach(cell => {
+      cell.addEventListener('click', () => {
+        const date = cell.dataset.date;
+        if (!date) return;
+        Nav.goTo('entry');
+        setTimeout(() => {
+          const dateEl = document.getElementById('entry-date');
+          if (dateEl) {
+            dateEl.value = date;
+            dateEl.dispatchEvent(new Event('change'));
+          }
+        }, 50);
+      });
+    });
+  },
+
+  /** Render weekly summary card showing current week stats vs previous week. */
+  _renderWeeklySummary() {
+    const card = document.getElementById('weekly-summary-card');
+    const grid = document.getElementById('weekly-summary-grid');
+    if (!card || !grid) return;
+
+    const sorted = Entries.getSorted();
+    if (sorted.length === 0) { card.classList.add('hidden'); return; }
+
+    const today = UI.todayISO();
+    const [ty, tm, td] = today.split('-').map(Number);
+    const todayDate = new Date(ty, tm - 1, td);
+    const daysFromMon = (todayDate.getDay() === 0) ? 6 : todayDate.getDay() - 1;
+
+    const thisMonDate = new Date(todayDate);
+    thisMonDate.setDate(thisMonDate.getDate() - daysFromMon);
+    const prevMonDate = new Date(thisMonDate);
+    prevMonDate.setDate(prevMonDate.getDate() - 7);
+    const prevSunDate = new Date(thisMonDate);
+    prevSunDate.setDate(prevSunDate.getDate() - 1);
+
+    const isoOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const thisWeekStart = isoOf(thisMonDate);
+    const prevWeekStart = isoOf(prevMonDate);
+    const prevWeekEnd   = isoOf(prevSunDate);
+
+    const weekEntries = (start, end) => sorted.filter(e => e.date >= start && e.date <= end);
+    const avg = (arr, key) => {
+      const vals = arr.map(e => e[key]).filter(v => v !== null && v !== undefined);
+      return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+    };
+    const sum = (arr, key) => {
+      const vals = arr.map(e => e[key]).filter(v => v !== null && v !== undefined);
+      return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)) : null;
+    };
+
+    const thisWeek = weekEntries(thisWeekStart, today);
+    const prevWeek = weekEntries(prevWeekStart, prevWeekEnd);
+
+    if (thisWeek.length === 0) { card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+
+    const fmt = v => (v !== null && v !== undefined) ? v.toLocaleString() : '—';
+    const delta = (cur, prev, unit = '', lowerBetter = false) => {
+      if (cur === null || prev === null) return '';
+      const diff = cur - prev;
+      if (diff === 0) return '<span class="wsv-delta neutral">0</span>';
+      const sign  = diff > 0 ? '+' : '';
+      const cls   = (diff > 0) === lowerBetter ? 'wsv-delta bad' : 'wsv-delta good';
+      return `<span class="${cls}">${sign}${diff.toLocaleString()}${unit}</span>`;
+    };
+
+    const thisAvgWeight = avg(thisWeek, 'weightKg');
+    const prevAvgWeight = avg(prevWeek, 'weightKg');
+    const weightDelta = (thisAvgWeight !== null && prevAvgWeight !== null)
+      ? `<span class="${(thisAvgWeight - prevAvgWeight) <= 0 ? 'wsv-delta good' : 'wsv-delta bad'}">${thisAvgWeight < prevAvgWeight ? '' : '+'}${(thisAvgWeight - prevAvgWeight).toFixed(1)} kg</span>`
+      : '';
+
+    const thisSteps = avg(thisWeek, 'stepsCount');
+    const prevSteps = avg(prevWeek, 'stepsCount');
+    const thisCalories = avg(thisWeek, 'caloriesKcal');
+    const prevCalories = avg(prevWeek, 'caloriesKcal');
+    const thisPts = sum(thisWeek.map(e => ({ pts: Computed.calcPoints(e) })), 'pts');
+    const prevPts = sum(prevWeek.map(e => ({ pts: Computed.calcPoints(e) })), 'pts');
+
+    grid.innerHTML = `
+      <div class="wsv-stat">
+        <div class="wsv-label">Avg Weight</div>
+        <div class="wsv-value">${thisAvgWeight !== null ? thisAvgWeight.toFixed(1) : '—'} kg</div>
+        <div class="wsv-sub">${weightDelta}</div>
+      </div>
+      <div class="wsv-stat">
+        <div class="wsv-label">Avg Steps</div>
+        <div class="wsv-value">${thisSteps !== null ? Math.round(thisSteps).toLocaleString() : '—'}</div>
+        <div class="wsv-sub">${delta(thisSteps !== null ? Math.round(thisSteps) : null, prevSteps !== null ? Math.round(prevSteps) : null)}</div>
+      </div>
+      <div class="wsv-stat">
+        <div class="wsv-label">Avg Calories</div>
+        <div class="wsv-value">${thisCalories !== null ? Math.round(thisCalories).toLocaleString() : '—'}</div>
+        <div class="wsv-sub">${delta(thisCalories !== null ? Math.round(thisCalories) : null, prevCalories !== null ? Math.round(prevCalories) : null, '', true)}</div>
+      </div>
+      <div class="wsv-stat">
+        <div class="wsv-label">Total Points</div>
+        <div class="wsv-value">${thisPts !== null ? thisPts : '—'}</div>
+        <div class="wsv-sub">${delta(thisPts, prevPts)}</div>
+      </div>
+      <div class="wsv-stat">
+        <div class="wsv-label">Days Logged</div>
+        <div class="wsv-value">${thisWeek.length}</div>
+        <div class="wsv-sub">${delta(thisWeek.length, prevWeek.length)}</div>
+      </div>
+    `;
   },
 
   _renderLogCTA() {
@@ -2436,6 +2741,7 @@ const Charts = {
     Charts._createStepsChart(labels, entries);
     Charts._createSodiumChart(labels, entries);
     Charts._createSodiumWeightChart(labels, entries);
+    Charts._createSleepWeightChart(labels, entries);
     Charts._createPointsChart(labels, entries);
     Charts._createCoachCheckInsChart(entries);
   },
@@ -2945,6 +3251,63 @@ const Charts = {
     });
   },
 
+  /** Dual-axis: sleep hours bars + weight line */
+  _createSleepWeightChart(labels, entries) {
+    const canvas = document.getElementById('chart-sleep-weight');
+    if (!canvas) return;
+
+    const sleepData  = entries.map(e => (e.sleepHours !== null && e.sleepHours !== undefined) ? e.sleepHours : null);
+    const weightData = entries.map(e => e.weightKg || null);
+
+    const cfg = Charts._baseConfig();
+    cfg.scales.y = {
+      type: 'linear', position: 'left',
+      title: { display: true, text: 'Sleep (hours)', color: '#a78bfa' },
+      ticks: { color: '#6b7280', font: { size: 11 } },
+      grid: { color: '#1f1f1f' },
+      min: 0, max: 12
+    };
+    cfg.scales.y1 = {
+      type: 'linear', position: 'right',
+      title: { display: true, text: 'Weight (kg)', color: '#60a5fa' },
+      ticks: { color: '#6b7280', font: { size: 11 } },
+      grid: { drawOnChartArea: false }
+    };
+
+    State.charts.sleepWeight = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Sleep (hours)',
+            data: sleepData,
+            backgroundColor: 'rgba(167,139,250,0.5)',
+            borderColor: '#a78bfa',
+            borderWidth: 1,
+            borderRadius: 3,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Weight (kg)',
+            data: weightData,
+            type: 'line',
+            borderColor: '#60a5fa',
+            backgroundColor: 'rgba(96,165,250,0.1)',
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            fill: false,
+            spanGaps: false,
+            tension: 0.3,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: cfg
+    });
+  },
+
   /** Dual-axis: sodium bars + next-day weight change line */
   _createSodiumWeightChart(labels, entries) {
     const canvas = document.getElementById('chart-sodium-weight');
@@ -3069,6 +3432,24 @@ const Profile = {
       if (maintCalEl) UI.setInputVal(maintCalEl, p.maintenanceCalories || '');
       travelCheck.addEventListener('change', () => {
         if (travelFields) travelFields.classList.toggle('hidden', !travelCheck.checked);
+      });
+    }
+
+    // Notifications toggle
+    Notifications.updateToggleUI();
+    const notifToggle = document.getElementById('notifications-toggle');
+    if (notifToggle) {
+      const newToggle = notifToggle.cloneNode(true);
+      notifToggle.parentNode.replaceChild(newToggle, notifToggle);
+      newToggle.checked = !!(State.profile.notificationsEnabled) &&
+        ('Notification' in window) && Notification.permission === 'granted';
+      newToggle.addEventListener('change', async () => {
+        if (newToggle.checked) {
+          const ok = await Notifications.requestPermission();
+          if (!ok) newToggle.checked = false;
+        } else {
+          Notifications.disable();
+        }
       });
     }
 
@@ -3443,8 +3824,16 @@ const Photos = {
           </div>`;
       }).join('');
 
+      const entryForPhoto = Entries.getById(session.date);
+      const weightAnnotation = (entryForPhoto && entryForPhoto.weightKg)
+        ? `<span class="photo-weight-badge">${entryForPhoto.weightKg} kg</span>`
+        : '';
+
       card.innerHTML = `
-        <div class="photo-session-date">${UI.formatDate(session.date)}</div>
+        <div class="photo-session-header">
+          <div class="photo-session-date">${UI.formatDate(session.date)}</div>
+          ${weightAnnotation}
+        </div>
         ${session.notes ? `<div class="photo-session-notes">${session.notes}</div>` : ''}
         <div class="photo-session-thumbs">${thumbs}</div>
         <button class="photo-session-delete" data-id="${session.id}">Remove Session</button>
@@ -3825,6 +4214,60 @@ const Auth = {
 };
 
 /* ============================================================
+   NOTIFICATIONS — browser push reminders to log daily entry
+   ============================================================ */
+const Notifications = {
+  /** Request permission and store preference. */
+  async requestPermission() {
+    if (!('Notification' in window)) {
+      UI.showToast('Notifications are not supported by this browser.', 'error');
+      return false;
+    }
+    const result = await Notification.requestPermission();
+    if (result === 'granted') {
+      State.profile.notificationsEnabled = true;
+      Storage.save();
+      UI.showToast('Reminders enabled! You\'ll be notified when today\'s entry is missing.', 'success');
+      return true;
+    } else {
+      State.profile.notificationsEnabled = false;
+      Storage.save();
+      UI.showToast('Notification permission denied. You can enable it in browser settings.', 'warning');
+      return false;
+    }
+  },
+
+  /** Disable notifications. */
+  disable() {
+    State.profile.notificationsEnabled = false;
+    Storage.save();
+  },
+
+  /** Fire a reminder notification if today has no entry and permission is granted. */
+  checkAndRemind() {
+    if (!State.profile.notificationsEnabled) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const today = UI.todayISO();
+    const existing = Entries.getById(today);
+    if (!existing) {
+      new Notification('Forge Protocol', {
+        body: 'Don\'t forget to log today\'s entry!',
+        icon: 'forgeprotocol%20logo%20icon.png'
+      });
+    }
+  },
+
+  /** Update the toggle UI to match current state. */
+  updateToggleUI() {
+    const toggle = document.getElementById('notifications-toggle');
+    if (!toggle) return;
+    const enabled = !!(State.profile.notificationsEnabled);
+    const granted = ('Notification' in window) && Notification.permission === 'granted';
+    toggle.checked = enabled && granted;
+  }
+};
+
+/* ============================================================
    APP — bootstrap and initialization
    ============================================================ */
 const App = {
@@ -3834,6 +4277,7 @@ const App = {
     Nav.init();
     Coach.updateNavVisibility();
     Nav.goTo('dashboard');
+    Notifications.checkAndRemind();
   },
 
   /** Main entry point — called on DOMContentLoaded. */
