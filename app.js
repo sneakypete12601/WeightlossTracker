@@ -684,7 +684,7 @@ const Entries = {
 
   /** Find entry by id (=date string). Returns undefined if not found. */
   getById(id) {
-    return State.entries.find(e => e.id === id);
+    return State.entries.find(e => e.id === id) || State.entries.find(e => e.date === id);
   },
 
   /** Most recent entry strictly before dateStr. Returns undefined if none. */
@@ -726,7 +726,7 @@ const Entries = {
    * @param {object} formData
    */
   update(id, formData) {
-    const idx = State.entries.findIndex(e => e.id === id);
+    const idx = State.entries.findIndex(e => e.id === id || e.date === id);
     if (idx === -1) return;
     State.entries[idx] = Entries._buildEntry(formData);
     Computed.recalculateAll();
@@ -781,7 +781,7 @@ const Entries = {
   },
 
   _removeById(id) {
-    const idx = State.entries.findIndex(e => e.id === id);
+    const idx = State.entries.findIndex(e => e.id === id || e.date === id);
     if (idx !== -1) State.entries.splice(idx, 1);
   }
 };
