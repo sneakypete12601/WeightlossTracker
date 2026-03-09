@@ -2273,6 +2273,9 @@ const Entry = {
     Entry._initCollapsibles();
     Entry._initForm(today);
     Entry._renderCoachTargetsCard(today);
+    // Show Fitbit badge on steps panel if connected
+    const fitbitBadge = document.getElementById('fitbit-entry-badge');
+    if (fitbitBadge) fitbitBadge.classList.toggle('hidden', !Fitbit.isConnected());
   },
 
   _initCollapsibles() {
@@ -3557,6 +3560,13 @@ const Profile = {
       fitbitDisconnBtn.parentNode.replaceChild(newDisc, fitbitDisconnBtn);
       newDisc.addEventListener('click', Fitbit.disconnect);
     }
+
+    const fitbitSyncBtn = document.getElementById('fitbit-sync-btn');
+    if (fitbitSyncBtn) {
+      const newSync = fitbitSyncBtn.cloneNode(true);
+      fitbitSyncBtn.parentNode.replaceChild(newSync, fitbitSyncBtn);
+      newSync.addEventListener('click', () => Fitbit.syncHistorical());
+    }
   },
 
   _renderMVDPresets() {
@@ -4592,6 +4602,55 @@ const Fitbit = {
     }
   },
 
+  // ── Historical sync ──
+
+  /**
+   * Fetch and backfill Fitbit step counts for all entries that are missing them.
+   * Skips entries that already have a stepsCount. Shows progress and a summary toast.
+   */
+  async syncHistorical() {
+    if (!Fitbit.isConnected()) return;
+
+    const syncBtn = document.getElementById('fitbit-sync-btn');
+    if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = 'Syncing…'; }
+
+    const missing = State.entries.filter(e => e.stepsCount === null || e.stepsCount === undefined);
+
+    if (missing.length === 0) {
+      UI.showToast('All entries already have step counts.', 'info');
+      if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = 'Sync Past Steps'; }
+      return;
+    }
+
+    let updated = 0;
+    let failed  = 0;
+
+    for (const entry of missing) {
+      const steps = await Fitbit.fetchSteps(entry.date);
+      if (steps !== null) {
+        const idx = State.entries.findIndex(e => e.date === entry.date);
+        if (idx !== -1) { State.entries[idx].stepsCount = steps; updated++; }
+      } else {
+        failed++;
+      }
+      // Small delay to avoid hitting Fitbit's rate limit (150 calls/hour)
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    if (updated > 0) {
+      Computed.recalculateAll();
+      Storage.save();
+    }
+
+    if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = 'Sync Past Steps'; }
+
+    const msg = updated > 0
+      ? `Steps synced for ${updated} entr${updated === 1 ? 'y' : 'ies'}.${failed > 0 ? ` ${failed} could not be fetched from Fitbit.` : ''}`
+      : 'No new step data found from Fitbit.';
+    UI.showToast(msg, updated > 0 ? 'success' : 'info');
+    Fitbit._updateProfileUI();
+  },
+
   // ── Profile UI ──
 
   /** Sync the Profile page Fitbit section to match current connection state. */
@@ -4600,6 +4659,8 @@ const Fitbit = {
     const connectBtn = document.getElementById('fitbit-connect-btn');
     const disconnBtn = document.getElementById('fitbit-disconnect-btn');
     const clientIdEl = document.getElementById('fitbit-client-id');
+    const syncRow    = document.getElementById('fitbit-sync-row');
+    const stepsInfo  = document.getElementById('fitbit-steps-info');
     if (!statusEl) return; // profile page not rendered
 
     const connected = Fitbit.isConnected();
@@ -4608,6 +4669,18 @@ const Fitbit = {
     if (connectBtn) connectBtn.classList.toggle('hidden', connected);
     if (disconnBtn) disconnBtn.classList.toggle('hidden', !connected);
     if (clientIdEl && State.profile.fitbit?.clientId) clientIdEl.value = State.profile.fitbit.clientId;
+
+    // Show sync row and entry counts only when connected
+    if (syncRow) syncRow.classList.toggle('hidden', !connected);
+    if (stepsInfo && connected) {
+      const total      = State.entries.length;
+      const withSteps  = State.entries.filter(e => e.stepsCount !== null && e.stepsCount !== undefined).length;
+      const missing    = total - withSteps;
+      stepsInfo.textContent = total === 0
+        ? 'New entries will auto-fill steps from Fitbit.'
+        : `${withSteps} of ${total} entr${total === 1 ? 'y has' : 'ies have'} steps logged.`
+          + (missing > 0 ? ` Click "Sync Past Steps" to fill in the ${missing} missing.` : ' All entries are covered.');
+    }
   }
 };
 

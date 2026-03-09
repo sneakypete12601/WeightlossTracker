@@ -3038,3 +3038,29 @@ form#daily-entry-form.form-locked input[type="range"] {
   margin-top: 3px;
 }
 
+/* Small inline badge next to "Steps" label on the entry form when Fitbit is connected */
+.fitbit-entry-badge {
+  display: inline-block;
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  border-radius: 4px;
+  padding: 1px 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+/* Sync row in Profile page Fitbit section */
+.fitbit-sync-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-md);
+}
+.fitbit-steps-info {
+  margin: 0;
+}
+

@@ -452,7 +452,7 @@
               <div class="entry-metric-unit">kg</div>
             </div>
             <div class="entry-metric-panel entry-metric-steps">
-              <div class="entry-metric-label">Steps</div>
+              <div class="entry-metric-label">Steps <span id="fitbit-entry-badge" class="fitbit-entry-badge hidden">Fitbit</span></div>
               <div class="entry-metric-input-wrap">
                 <input type="number" id="entry-steps" class="entry-big-input" placeholder="0" min="0" max="100000" step="1" inputmode="numeric">
               </div>
@@ -899,6 +899,12 @@
               <span id="fitbit-status-badge" class="badge fitbit-badge-disconnected">Not connected</span>
               <button type="button" id="fitbit-connect-btn" class="btn btn-sm btn-primary">Connect Fitbit</button>
               <button type="button" id="fitbit-disconnect-btn" class="btn btn-sm btn-secondary hidden">Disconnect</button>
+            </div>
+            <!-- Shown only when connected -->
+            <div id="fitbit-sync-row" class="fitbit-sync-row hidden">
+              <p id="fitbit-steps-info" class="form-hint fitbit-steps-info"></p>
+              <button type="button" id="fitbit-sync-btn" class="btn btn-sm btn-secondary">Sync Past Steps</button>
+              <p class="form-hint" style="margin-top:var(--space-sm)">New entries will auto-fill steps automatically when you open Log Entry.</p>
             </div>
             <div class="form-group">
               <label for="fitbit-client-id">Fitbit App Client ID</label>
