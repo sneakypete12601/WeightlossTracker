@@ -2005,9 +2005,33 @@ const Dashboard = {
    HISTORY — entry table with add/edit/delete
    ============================================================ */
 const History = {
+  _syncScrollTop() {
+    const scrollTop = document.getElementById('history-scroll-top');
+    const tableWrapper = document.getElementById('history-table-wrapper');
+    const scrollTopInner = document.getElementById('history-scroll-top-inner');
+    if (!scrollTop || !tableWrapper || !scrollTopInner) return;
+    scrollTopInner.style.width = tableWrapper.scrollWidth + 'px';
+    // Use flags to prevent feedback loops
+    scrollTop._syncing = false;
+    tableWrapper._syncing = false;
+    scrollTop.onscroll = () => {
+      if (scrollTop._syncing) return;
+      tableWrapper._syncing = true;
+      tableWrapper.scrollLeft = scrollTop.scrollLeft;
+      tableWrapper._syncing = false;
+    };
+    tableWrapper.onscroll = () => {
+      if (tableWrapper._syncing) return;
+      scrollTop._syncing = true;
+      scrollTop.scrollLeft = tableWrapper.scrollLeft;
+      scrollTop._syncing = false;
+    };
+  },
+
   render() {
     const sorted = Entries.getSorted().reverse(); // newest first
     History._buildTable(sorted);
+    History._syncScrollTop();
 
     // Add entry button
     const addBtn = document.getElementById('history-add-btn');
@@ -2101,6 +2125,16 @@ const History = {
     tbody.querySelectorAll('.btn-table-delete').forEach(btn => {
       btn.addEventListener('click', () => History.confirmDelete(btn.dataset.id));
     });
+
+    // Refresh top scrollbar mirror width after table rebuild
+    const scrollTopInner = document.getElementById('history-scroll-top-inner');
+    const tableWrapper   = document.getElementById('history-table-wrapper');
+    if (scrollTopInner && tableWrapper) {
+      // Use rAF so the browser has painted the new table rows first
+      requestAnimationFrame(() => {
+        scrollTopInner.style.width = tableWrapper.scrollWidth + 'px';
+      });
+    }
   },
 
   openEditModal(id) {

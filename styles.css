@@ -818,6 +818,16 @@ select {
   max-width: 340px;
 }
 
+.table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+  margin-bottom: 2px;
+}
+.table-scroll-top::-webkit-scrollbar { height: 6px; }
+.table-scroll-top::-webkit-scrollbar-track { background: var(--color-bg-secondary); border-radius: 3px; }
+.table-scroll-top::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+
 .table-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
