@@ -59,7 +59,7 @@ const State = {
     goalWeightKg: 0,
     weeklyGoalKg: null,   // target kg to lose per week (null = not set)
     journeyStartDate: '', // ISO date string YYYY-MM-DD
-    fitbit: { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null },
+    fitbit: { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null, proxyUrl: '' },
     coach: {              // Optional coach section
       enabled: false,
       name: '',
@@ -170,7 +170,9 @@ const Storage = {
         ];
       }
       if (!State.profile.fitbit) {
-        State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
+        State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null, proxyUrl: '' };
+      } else if (!('proxyUrl' in State.profile.fitbit)) {
+        State.profile.fitbit.proxyUrl = '';
       }
       // Migrate old photo schema: { id, date, label, base64 } → { id, date, notes, front, side, back }
       State.photos = Storage._migratePhotos(State.photos);
@@ -343,7 +345,7 @@ const Storage = {
           ];
         }
         if (!State.profile.fitbit) {
-          State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
+          State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null, proxyUrl: '' };
         }
         // Recalculate all computed fields in case schema changed
         Computed.recalculateAll();
@@ -3567,9 +3569,19 @@ const Profile = {
 
     const fitbitClientIdEl = document.getElementById('fitbit-client-id');
     if (fitbitClientIdEl) {
+      fitbitClientIdEl.value = State.profile.fitbit?.clientId || '';
       fitbitClientIdEl.addEventListener('input', () => {
-        if (!State.profile.fitbit) State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
+        if (!State.profile.fitbit) State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null, proxyUrl: '' };
         State.profile.fitbit.clientId = fitbitClientIdEl.value.trim();
+      });
+    }
+
+    const fitbitProxyUrlEl = document.getElementById('fitbit-proxy-url');
+    if (fitbitProxyUrlEl) {
+      fitbitProxyUrlEl.value = State.profile.fitbit?.proxyUrl || '';
+      fitbitProxyUrlEl.addEventListener('input', () => {
+        if (!State.profile.fitbit) State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null, proxyUrl: '' };
+        State.profile.fitbit.proxyUrl = fitbitProxyUrlEl.value.trim();
       });
     }
 
@@ -3580,7 +3592,7 @@ const Profile = {
       newConn.addEventListener('click', () => {
         // Persist Client ID before redirecting — it must survive the round-trip
         if (fitbitClientIdEl) {
-          if (!State.profile.fitbit) State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
+          if (!State.profile.fitbit) State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null, proxyUrl: '' };
           State.profile.fitbit.clientId = fitbitClientIdEl.value.trim();
           Storage.save();
         }
@@ -3680,7 +3692,8 @@ const Profile = {
     const travelEnabled = document.getElementById('travel-mode-enabled')?.checked || false;
     const maintCal = UI.numOrNull(document.getElementById('maintenance-calories'));
 
-    const fitbitClientIdInput = document.getElementById('fitbit-client-id');
+    const fitbitClientIdInput  = document.getElementById('fitbit-client-id');
+    const fitbitProxyUrlInput  = document.getElementById('fitbit-proxy-url');
     State.profile = {
       name, dob, heightCm: height, journeyStartDate: start,
       startingWeightKg: startW, goalWeightKg: goalW,
@@ -3690,6 +3703,7 @@ const Profile = {
       notificationsEnabled: State.profile.notificationsEnabled || false,
       fitbit: {
         clientId:     (fitbitClientIdInput ? fitbitClientIdInput.value.trim() : null) || State.profile.fitbit?.clientId || '',
+        proxyUrl:     (fitbitProxyUrlInput  ? fitbitProxyUrlInput.value.trim()  : null) || State.profile.fitbit?.proxyUrl  || '',
         accessToken:  State.profile.fitbit?.accessToken  || null,
         refreshToken: State.profile.fitbit?.refreshToken || null,
         tokenExpiry:  State.profile.fitbit?.tokenExpiry  || null,
@@ -4592,8 +4606,11 @@ const Fitbit = {
     }
 
     try {
-      const res = await fetch(
-        `https://api.fitbit.com/1/user/-/activities/date/${dateStr}.json`,
+      const proxyBase = State.profile.fitbit?.proxyUrl?.trim().replace(/\/$/, '');
+      const apiUrl = proxyBase
+        ? `${proxyBase}/1/user/-/activities/date/${dateStr}.json`
+        : `https://api.fitbit.com/1/user/-/activities/date/${dateStr}.json`;
+      const res = await fetch(apiUrl,
         { headers: { 'Authorization': `Bearer ${State.profile.fitbit.accessToken}` } }
       );
       if (res.status === 401) {
