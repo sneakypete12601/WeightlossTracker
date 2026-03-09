@@ -891,6 +891,21 @@
             <div id="mvd-presets-list"></div>
             <button type="button" id="mvd-save-btn" class="btn btn-secondary">Save Presets</button>
           </div>
+          <!-- Fitbit Integration -->
+          <div class="form-section">
+            <h3 class="form-section-title">Fitbit Integration</h3>
+            <p class="form-hint">Connect your Fitbit to automatically fill in your step count when you open Log Entry. Requires a free Fitbit Personal app — register at <strong>dev.fitbit.com/apps/new</strong> (type: Personal) to get a Client ID.</p>
+            <div class="fitbit-status-row">
+              <span id="fitbit-status-badge" class="badge fitbit-badge-disconnected">Not connected</span>
+              <button type="button" id="fitbit-connect-btn" class="btn btn-sm btn-primary">Connect Fitbit</button>
+              <button type="button" id="fitbit-disconnect-btn" class="btn btn-sm btn-secondary hidden">Disconnect</button>
+            </div>
+            <div class="form-group">
+              <label for="fitbit-client-id">Fitbit App Client ID</label>
+              <input type="text" id="fitbit-client-id" placeholder="e.g. 23ABCD" autocomplete="off" spellcheck="false">
+              <span class="form-hint">Found at dev.fitbit.com/apps &rarr; your app &rarr; OAuth 2.0 Client ID. You must also set the Redirect URL in your Fitbit app to this page&rsquo;s URL.</span>
+            </div>
+          </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-accent">Save Profile</button>
           </div>

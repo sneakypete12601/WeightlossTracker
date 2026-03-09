@@ -3007,3 +3007,34 @@ form#daily-entry-form.form-locked input[type="range"] {
   font-size: 0.75rem;
   font-weight: 600;
 }
+
+/* ============================================================
+   FITBIT INTEGRATION
+   ============================================================ */
+.fitbit-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+}
+.fitbit-badge-connected {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+.fitbit-badge-disconnected {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+/* "via Fitbit" label shown below the steps input when auto-filled */
+.fitbit-via-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4ade80;
+  margin-top: 3px;
+}
+

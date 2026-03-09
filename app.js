@@ -28,6 +28,24 @@ const STORAGE_KEY    = 'weightTrackerData';   // localStorage key for state
 const WIZARD_KEY     = 'weightTrackerSetupDone'; // localStorage flag
 
 /* ============================================================
+   FITBIT OAUTH CALLBACK — captured before Firebase auth resolves.
+   If the page loaded from a Fitbit redirect (?code=...&state=...),
+   this IIFE captures the code and immediately cleans the URL so a
+   manual refresh doesn't replay the one-time code.
+   Processed in App.init() after Storage.load() completes.
+   ============================================================ */
+const _fitbitCallback = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const code   = params.get('code');
+  const state  = params.get('state');
+  if (code && state) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return { code, state };
+  }
+  return null;
+})();
+
+/* ============================================================
    STATE — single mutable in-memory store
    Everything the app needs lives here. Persisted to localStorage
    after every mutation. Exported/imported as JSON.
@@ -41,6 +59,7 @@ const State = {
     goalWeightKg: 0,
     weeklyGoalKg: null,   // target kg to lose per week (null = not set)
     journeyStartDate: '', // ISO date string YYYY-MM-DD
+    fitbit: { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null },
     coach: {              // Optional coach section
       enabled: false,
       name: '',
@@ -149,6 +168,9 @@ const Storage = {
           {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
           {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null}
         ];
+      }
+      if (!State.profile.fitbit) {
+        State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
       }
       // Migrate old photo schema: { id, date, label, base64 } → { id, date, notes, front, side, back }
       State.photos = Storage._migratePhotos(State.photos);
@@ -319,6 +341,9 @@ const Storage = {
             {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
             {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null}
           ];
+        }
+        if (!State.profile.fitbit) {
+          State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
         }
         // Recalculate all computed fields in case schema changed
         Computed.recalculateAll();
@@ -2356,6 +2381,7 @@ const Entry = {
     dateInput.addEventListener('change', () => {
       _applyExistingState(dateInput.value);
       liveUpdate();
+      Fitbit.autofillSteps(dateInput.value);
     });
 
     // Bind weight live update
@@ -2367,6 +2393,8 @@ const Entry = {
 
     // Apply initial state (fills form if today already has an entry)
     _applyExistingState(dateInput.value || today);
+    // Auto-fill steps from Fitbit for new entries (fire-and-forget)
+    Fitbit.autofillSteps(dateInput.value || today);
 
     // Sliders
     const hungerSlider = document.getElementById('entry-hunger');
@@ -3496,6 +3524,39 @@ const Profile = {
         UI.showToast('Presets saved!', 'success');
       });
     }
+
+    // ── Fitbit integration section ──
+    Fitbit._updateProfileUI();
+
+    const fitbitClientIdEl = document.getElementById('fitbit-client-id');
+    if (fitbitClientIdEl) {
+      fitbitClientIdEl.addEventListener('input', () => {
+        if (!State.profile.fitbit) State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
+        State.profile.fitbit.clientId = fitbitClientIdEl.value.trim();
+      });
+    }
+
+    const fitbitConnectBtn = document.getElementById('fitbit-connect-btn');
+    if (fitbitConnectBtn) {
+      const newConn = fitbitConnectBtn.cloneNode(true);
+      fitbitConnectBtn.parentNode.replaceChild(newConn, fitbitConnectBtn);
+      newConn.addEventListener('click', () => {
+        // Persist Client ID before redirecting — it must survive the round-trip
+        if (fitbitClientIdEl) {
+          if (!State.profile.fitbit) State.profile.fitbit = { clientId: '', accessToken: null, refreshToken: null, tokenExpiry: null };
+          State.profile.fitbit.clientId = fitbitClientIdEl.value.trim();
+          Storage.save();
+        }
+        Fitbit.connect();
+      });
+    }
+
+    const fitbitDisconnBtn = document.getElementById('fitbit-disconnect-btn');
+    if (fitbitDisconnBtn) {
+      const newDisc = fitbitDisconnBtn.cloneNode(true);
+      fitbitDisconnBtn.parentNode.replaceChild(newDisc, fitbitDisconnBtn);
+      newDisc.addEventListener('click', Fitbit.disconnect);
+    }
   },
 
   _renderMVDPresets() {
@@ -3568,6 +3629,7 @@ const Profile = {
     const travelEnabled = document.getElementById('travel-mode-enabled')?.checked || false;
     const maintCal = UI.numOrNull(document.getElementById('maintenance-calories'));
 
+    const fitbitClientIdInput = document.getElementById('fitbit-client-id');
     State.profile = {
       name, dob, heightCm: height, journeyStartDate: start,
       startingWeightKg: startW, goalWeightKg: goalW,
@@ -3575,6 +3637,12 @@ const Profile = {
       travelMode: travelEnabled,
       maintenanceCalories: maintCal,
       notificationsEnabled: State.profile.notificationsEnabled || false,
+      fitbit: {
+        clientId:     (fitbitClientIdInput ? fitbitClientIdInput.value.trim() : null) || State.profile.fitbit?.clientId || '',
+        accessToken:  State.profile.fitbit?.accessToken  || null,
+        refreshToken: State.profile.fitbit?.refreshToken || null,
+        tokenExpiry:  State.profile.fitbit?.tokenExpiry  || null,
+      },
       mvdPresets: State.profile.mvdPresets || [
         {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
         {name:'',caloriesTarget:null,proteinTarget:null,stepsTarget:null},
@@ -4292,6 +4360,258 @@ const Notifications = {
 };
 
 /* ============================================================
+   FITBIT — OAuth 2.0 PKCE integration (no backend, no client secret)
+   Scope: activity (daily step count).
+   Tokens stored in State.profile.fitbit, persisted via Storage.save().
+   ============================================================ */
+const Fitbit = {
+
+  // ── PKCE helpers ──
+
+  /** Crypto-random 64-char URL-safe string used as the PKCE code verifier. */
+  _generateVerifier() {
+    const arr = new Uint8Array(48);
+    crypto.getRandomValues(arr);
+    return btoa(String.fromCharCode(...arr))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  },
+
+  /** SHA-256 of the verifier, base64url-encoded — this is the PKCE challenge sent to Fitbit. */
+  async _generateChallenge(verifier) {
+    const encoded = new TextEncoder().encode(verifier);
+    const digest  = await crypto.subtle.digest('SHA-256', encoded);
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  },
+
+  // ── Connection state ──
+
+  /** True if there is a stored access token that has not yet expired. */
+  isConnected() {
+    const fb = State.profile.fitbit;
+    return !!(fb?.accessToken && fb.tokenExpiry && Date.now() < fb.tokenExpiry);
+  },
+
+  // ── OAuth flow ──
+
+  /**
+   * Start the PKCE authorization redirect.
+   * Generates verifier + challenge, stores verifier in sessionStorage,
+   * then redirects the browser to Fitbit's OAuth consent screen.
+   */
+  async connect() {
+    const clientId = State.profile.fitbit?.clientId?.trim();
+    if (!clientId) {
+      UI.showToast('Enter your Fitbit Client ID first.', 'error');
+      return;
+    }
+    const verifier  = Fitbit._generateVerifier();
+    const challenge = await Fitbit._generateChallenge(verifier);
+    const nonce     = Fitbit._generateVerifier(); // random state nonce (CSRF protection)
+    const redirectUri = window.location.origin + window.location.pathname;
+
+    // Store verifier + nonce in sessionStorage ONLY — never in Firestore or profile
+    sessionStorage.setItem('fitbit_verifier', verifier);
+    sessionStorage.setItem('fitbit_nonce',    nonce);
+
+    const params = new URLSearchParams({
+      response_type:         'code',
+      client_id:             clientId,
+      redirect_uri:          redirectUri,
+      scope:                 'activity',
+      code_challenge:        challenge,
+      code_challenge_method: 'S256',
+      state:                 nonce
+    });
+    window.location.href = `https://www.fitbit.com/oauth2/authorize?${params}`;
+  },
+
+  /**
+   * Exchange the authorization code for tokens.
+   * Called by App.init() after Storage.load(), when _fitbitCallback is not null.
+   */
+  async handleCallback(code, stateParam) {
+    const storedNonce    = sessionStorage.getItem('fitbit_nonce');
+    const storedVerifier = sessionStorage.getItem('fitbit_verifier');
+    sessionStorage.removeItem('fitbit_nonce');
+    sessionStorage.removeItem('fitbit_verifier');
+
+    // Validate state nonce — abort on mismatch (CSRF guard)
+    if (!storedNonce || stateParam !== storedNonce) {
+      UI.showToast('Fitbit connection failed: security check failed.', 'error');
+      console.warn('Fitbit: state nonce mismatch — possible CSRF, aborting.');
+      return;
+    }
+    if (!storedVerifier) {
+      UI.showToast('Fitbit connection failed: session expired. Please try again.', 'error');
+      return;
+    }
+
+    const clientId    = State.profile.fitbit?.clientId?.trim();
+    const redirectUri = window.location.origin + window.location.pathname;
+
+    try {
+      const res = await fetch('https://api.fitbit.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type:    'authorization_code',
+          client_id:     clientId,
+          code,
+          redirect_uri:  redirectUri,
+          code_verifier: storedVerifier
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.errors?.[0]?.message || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      State.profile.fitbit.accessToken  = data.access_token;
+      State.profile.fitbit.refreshToken = data.refresh_token;
+      State.profile.fitbit.tokenExpiry  = Date.now() + (data.expires_in * 1000);
+      Storage.save();
+      UI.showToast('Fitbit connected! Steps will auto-fill on Log Entry.', 'success');
+      Fitbit._updateProfileUI();
+    } catch (e) {
+      console.error('Fitbit token exchange error:', e);
+      UI.showToast(`Fitbit connection failed: ${e.message}`, 'error');
+    }
+  },
+
+  /** Refresh the access token using the stored refresh token. */
+  async _refresh() {
+    const fb = State.profile.fitbit;
+    if (!fb?.refreshToken) throw new Error('No refresh token stored.');
+    const res = await fetch('https://api.fitbit.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type:    'refresh_token',
+        client_id:     fb.clientId,
+        refresh_token: fb.refreshToken
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.errors?.[0]?.message || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    fb.accessToken  = data.access_token;
+    fb.refreshToken = data.refresh_token; // single-use — always replace
+    fb.tokenExpiry  = Date.now() + (data.expires_in * 1000);
+    Storage.save();
+  },
+
+  /** Clear tokens and update UI. */
+  disconnect() {
+    if (!State.profile.fitbit) return;
+    State.profile.fitbit.accessToken  = null;
+    State.profile.fitbit.refreshToken = null;
+    State.profile.fitbit.tokenExpiry  = null;
+    Storage.save();
+    UI.showToast('Fitbit disconnected.', 'info');
+    Fitbit._updateProfileUI();
+  },
+
+  // ── Data fetch ──
+
+  /**
+   * Fetch step count for a given date from the Fitbit API.
+   * Proactively refreshes the token if it expires within 60 minutes.
+   * Returns null on any failure (silently — never crashes the entry form).
+   */
+  async fetchSteps(dateStr) {
+    const fb = State.profile.fitbit;
+    if (!fb?.accessToken) return null;
+
+    // Proactive refresh if expiring within 60 minutes
+    if (Date.now() > (fb.tokenExpiry - 60 * 60 * 1000)) {
+      try {
+        await Fitbit._refresh();
+      } catch (e) {
+        console.warn('Fitbit token refresh failed:', e.message);
+        fb.accessToken = null; fb.refreshToken = null; fb.tokenExpiry = null;
+        Storage.save();
+        Fitbit._updateProfileUI();
+        return null;
+      }
+    }
+
+    try {
+      const res = await fetch(
+        `https://api.fitbit.com/1/user/-/activities/date/${dateStr}.json`,
+        { headers: { 'Authorization': `Bearer ${State.profile.fitbit.accessToken}` } }
+      );
+      if (res.status === 401) {
+        // Token rejected — clear and prompt reconnect
+        fb.accessToken = null; fb.refreshToken = null; fb.tokenExpiry = null;
+        Storage.save();
+        Fitbit._updateProfileUI();
+        UI.showToast('Fitbit session expired. Please reconnect in Profile.', 'warning');
+        return null;
+      }
+      if (!res.ok) throw new Error(`Fitbit API ${res.status}`);
+      const data = await res.json();
+      return data?.summary?.steps ?? null;
+    } catch (e) {
+      console.warn('Fitbit fetchSteps error:', e.message);
+      return null;
+    }
+  },
+
+  /**
+   * Auto-fill the steps input for new entries only.
+   * Guards: skips if entry already has steps saved, or if user has typed a value.
+   */
+  async autofillSteps(dateStr) {
+    if (!Fitbit.isConnected()) return;
+
+    // Skip if entry already saved with a step count
+    const existing = Entries.getById(dateStr);
+    if (existing && existing.stepsCount !== null && existing.stepsCount !== undefined) return;
+
+    const steps = await Fitbit.fetchSteps(dateStr);
+    if (steps === null) return;
+
+    const stepsInput = document.getElementById('entry-steps');
+    if (!stepsInput) return;
+
+    // Don't overwrite if the user has already typed something
+    if (stepsInput.value !== '' && stepsInput.value !== '0') return;
+
+    UI.setInputVal(stepsInput, steps);
+
+    // Append "via Fitbit" label inside the metric panel
+    const panel = stepsInput.closest('.entry-metric-panel');
+    if (panel && !panel.querySelector('.fitbit-via-label')) {
+      const label = document.createElement('div');
+      label.className = 'fitbit-via-label';
+      label.textContent = 'via Fitbit';
+      panel.appendChild(label);
+    }
+  },
+
+  // ── Profile UI ──
+
+  /** Sync the Profile page Fitbit section to match current connection state. */
+  _updateProfileUI() {
+    const statusEl   = document.getElementById('fitbit-status-badge');
+    const connectBtn = document.getElementById('fitbit-connect-btn');
+    const disconnBtn = document.getElementById('fitbit-disconnect-btn');
+    const clientIdEl = document.getElementById('fitbit-client-id');
+    if (!statusEl) return; // profile page not rendered
+
+    const connected = Fitbit.isConnected();
+    statusEl.textContent = connected ? 'Connected' : 'Not connected';
+    statusEl.className   = 'badge ' + (connected ? 'fitbit-badge-connected' : 'fitbit-badge-disconnected');
+    if (connectBtn) connectBtn.classList.toggle('hidden', connected);
+    if (disconnBtn) disconnBtn.classList.toggle('hidden', !connected);
+    if (clientIdEl && State.profile.fitbit?.clientId) clientIdEl.value = State.profile.fitbit.clientId;
+  }
+};
+
+/* ============================================================
    APP — bootstrap and initialization
    ============================================================ */
 const App = {
@@ -4319,6 +4639,10 @@ const App = {
         Auth.hideLoginScreen();
         Auth.updateNavUI(user);
         await Storage.load();
+        // Process Fitbit OAuth callback if we landed here from Fitbit's redirect
+        if (_fitbitCallback) {
+          await Fitbit.handleCallback(_fitbitCallback.code, _fitbitCallback.state);
+        }
         if (Storage.isFirstLaunch()) {
           Wizard.show();
         } else {
