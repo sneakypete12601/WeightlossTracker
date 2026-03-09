@@ -4650,6 +4650,18 @@ const Fitbit = {
     }
   },
 
+  /** Auto-refresh today's steps in the background once per hour. */
+  startAutoSync() {
+    if (!Fitbit.isConnected()) return;
+    const sync = () => {
+      if (!Fitbit.isConnected()) return;
+      const today = new Date().toISOString().slice(0, 10);
+      Fitbit.autofillSteps(today);
+    };
+    sync(); // run immediately on start
+    setInterval(sync, 60 * 60 * 1000); // then every hour
+  },
+
   /**
    * Auto-fill the steps input for new entries only.
    * Guards: skips if entry already has steps saved, or if user has typed a value.
@@ -4831,6 +4843,7 @@ const App = {
         if (_fitbitCallback) {
           await Fitbit.handleCallback(_fitbitCallback.code, _fitbitCallback.state);
         }
+        Fitbit.startAutoSync();
         if (Storage.isFirstLaunch()) {
           Wizard.show();
         } else {
