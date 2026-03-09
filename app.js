@@ -464,8 +464,9 @@ const Computed = {
       monDate.setDate(monDate.getDate() - daysFromMon);
 
       let totalDeficit = 0;
+      let totalLogged  = 0;
       let totalTarget  = 0;
-      let daysWithTarget = 0;
+      let daysLogged   = 0;
 
       const cur = new Date(monDate);
       while (true) {
@@ -474,16 +475,17 @@ const Computed = {
         if (curISO > todayISO) break;
         const plan = State.profile.coach?.weeklyPlan?.[dayNames[cur.getDay()]];
         if (plan?.caloriesTarget) {
-          totalTarget += plan.caloriesTarget;
           const entry = Entries.getById(curISO);
           if (entry && entry.caloriesKcal !== null && entry.caloriesKcal !== undefined) {
+            totalTarget  += plan.caloriesTarget;
+            totalLogged  += entry.caloriesKcal;
             totalDeficit += plan.caloriesTarget - entry.caloriesKcal;
+            daysLogged++;
           }
-          daysWithTarget++;
         }
         cur.setDate(cur.getDate() + 1);
       }
-      if (daysWithTarget > 0) {
+      if (daysLogged > 0) {
         weeklyDeficit = Math.round(totalDeficit);
         weeklyDeficitTarget = Math.round(totalTarget);
       }
@@ -1608,11 +1610,13 @@ const Dashboard = {
     if (deficitCard) {
       if (stats.weeklyDeficit !== null) {
         deficitCard.classList.remove('hidden');
-        set('stat-weekly-deficit', stats.weeklyDeficit >= 0
-          ? `+${stats.weeklyDeficit.toLocaleString()}`
-          : stats.weeklyDeficit.toLocaleString());
+        const deficitAbs = Math.abs(stats.weeklyDeficit);
+        const deficitLabel = stats.weeklyDeficit >= 0
+          ? `${deficitAbs.toLocaleString()} kcal under`
+          : `${deficitAbs.toLocaleString()} kcal over`;
+        set('stat-weekly-deficit', deficitLabel);
         set('stat-weekly-deficit-target',
-          `vs ${stats.weeklyDeficitTarget.toLocaleString()} kcal target this week`);
+          `vs ${stats.weeklyDeficitTarget.toLocaleString()} kcal target (days logged this week)`);
       } else {
         deficitCard.classList.add('hidden');
       }
@@ -1884,6 +1888,16 @@ const Dashboard = {
 
     if (thisWeek.length === 0) { card.classList.add('hidden'); return; }
     card.classList.remove('hidden');
+
+    // Update card title to show date range (Mon–today)
+    const titleEl = document.getElementById('weekly-summary-title');
+    if (titleEl) {
+      const monLabel = UI.formatDate(thisWeekStart);
+      const todayLabel = UI.formatDate(today);
+      titleEl.textContent = thisWeekStart === today
+        ? `This Week — ${monLabel}`
+        : `This Week — ${monLabel} to ${todayLabel}`;
+    }
 
     const fmt = v => (v !== null && v !== undefined) ? v.toLocaleString() : '—';
     const delta = (cur, prev, unit = '', lowerBetter = false) => {

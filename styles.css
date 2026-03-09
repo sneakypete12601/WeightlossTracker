@@ -2719,7 +2719,7 @@ form#daily-entry-form.form-locked input[type="range"] {
   min-width: 160px;
 }
 .weekly-deficit-value {
-  font-size: 1.6rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--color-accent);
 }

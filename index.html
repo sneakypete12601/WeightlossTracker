@@ -284,6 +284,12 @@
         <!-- Retention flags -->
         <div id="retention-flags" class="hidden"></div>
 
+        <!-- Weekly summary (Mon–today) -->
+        <div id="weekly-summary-card" class="card hidden">
+          <div class="card-title" id="weekly-summary-title">This Week</div>
+          <div id="weekly-summary-grid"></div>
+        </div>
+
         <!-- Summary stat cards -->
         <div id="dashboard-summary">
           <div class="stat-card">
@@ -340,7 +346,7 @@
 
         <!-- Weekly calorie deficit (only shown when coach plan has calorie targets) -->
         <div id="weekly-deficit-card" class="weekly-deficit-card hidden">
-          <div class="weekly-deficit-label">This Week's Calorie Deficit</div>
+          <div class="weekly-deficit-label">Weekly Calorie Balance</div>
           <div class="weekly-deficit-value" id="stat-weekly-deficit">—</div>
           <div class="weekly-deficit-sub" id="stat-weekly-deficit-target"></div>
         </div>
@@ -396,12 +402,6 @@
         <div class="card" id="heatmap-card">
           <div class="card-title">Activity (Last 52 Weeks)</div>
           <div id="heatmap-container"></div>
-        </div>
-
-        <!-- Weekly summary -->
-        <div id="weekly-summary-card" class="card hidden">
-          <div class="card-title">This Week</div>
-          <div id="weekly-summary-grid"></div>
         </div>
 
         <!-- Log entry CTA -->
