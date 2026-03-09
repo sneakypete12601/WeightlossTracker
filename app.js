@@ -3601,6 +3601,13 @@ const Profile = {
       fitbitSyncBtn.parentNode.replaceChild(newSync, fitbitSyncBtn);
       newSync.addEventListener('click', () => Fitbit.syncHistorical());
     }
+
+    const fitbitTestBtn = document.getElementById('fitbit-test-btn');
+    if (fitbitTestBtn) {
+      const newTest = fitbitTestBtn.cloneNode(true);
+      fitbitTestBtn.parentNode.replaceChild(newTest, fitbitTestBtn);
+      newTest.addEventListener('click', () => Fitbit.testConnection());
+    }
   },
 
   _renderMVDPresets() {
@@ -4563,11 +4570,13 @@ const Fitbit = {
   /**
    * Fetch step count for a given date from the Fitbit API.
    * Proactively refreshes the token if it expires within 60 minutes.
-   * Returns null on any failure (silently — never crashes the entry form).
+   * Returns { steps: number|null, error: string|null }
+   *   - steps: actual count (may be 0 if device not worn), or null on error/no data
+   *   - error: human-readable error string, or null on success
    */
   async fetchSteps(dateStr) {
     const fb = State.profile.fitbit;
-    if (!fb?.accessToken) return null;
+    if (!fb?.accessToken) return { steps: null, error: 'No access token stored' };
 
     // Proactive refresh if expiring within 60 minutes
     if (Date.now() > (fb.tokenExpiry - 60 * 60 * 1000)) {
@@ -4578,7 +4587,7 @@ const Fitbit = {
         fb.accessToken = null; fb.refreshToken = null; fb.tokenExpiry = null;
         Storage.save();
         Fitbit._updateProfileUI();
-        return null;
+        return { steps: null, error: `Token refresh failed: ${e.message}` };
       }
     }
 
@@ -4588,19 +4597,39 @@ const Fitbit = {
         { headers: { 'Authorization': `Bearer ${State.profile.fitbit.accessToken}` } }
       );
       if (res.status === 401) {
-        // Token rejected — clear and prompt reconnect
         fb.accessToken = null; fb.refreshToken = null; fb.tokenExpiry = null;
         Storage.save();
         Fitbit._updateProfileUI();
-        UI.showToast('Fitbit session expired. Please reconnect in Profile.', 'warning');
-        return null;
+        return { steps: null, error: '401 Unauthorized — token rejected' };
       }
-      if (!res.ok) throw new Error(`Fitbit API ${res.status}`);
+      if (!res.ok) {
+        let body = '';
+        try { body = await res.text(); } catch (_) {}
+        return { steps: null, error: `HTTP ${res.status}: ${body.slice(0, 120)}` };
+      }
       const data = await res.json();
-      return data?.summary?.steps ?? null;
+      const steps = data?.summary?.steps;
+      if (steps === undefined || steps === null) {
+        return { steps: null, error: 'API response missing summary.steps' };
+      }
+      return { steps, error: null };
     } catch (e) {
       console.warn('Fitbit fetchSteps error:', e.message);
-      return null;
+      return { steps: null, error: `Network error: ${e.message}` };
+    }
+  },
+
+  /**
+   * Quick diagnostic: fetch today's steps and show the raw result as a toast.
+   */
+  async testConnection() {
+    const today = new Date().toISOString().slice(0, 10);
+    UI.showToast('Testing Fitbit connection…', 'info');
+    const { steps, error } = await Fitbit.fetchSteps(today);
+    if (error) {
+      UI.showToast(`Fitbit test failed: ${error}`, 'error');
+    } else {
+      UI.showToast(`Fitbit test OK — today's steps: ${steps.toLocaleString()}`, 'success');
     }
   },
 
@@ -4615,8 +4644,8 @@ const Fitbit = {
     const existing = Entries.getById(dateStr);
     if (existing && existing.stepsCount !== null && existing.stepsCount !== undefined) return;
 
-    const steps = await Fitbit.fetchSteps(dateStr);
-    if (steps === null) return;
+    const { steps, error } = await Fitbit.fetchSteps(dateStr);
+    if (error || steps === null) return;
 
     const stepsInput = document.getElementById('entry-steps');
     if (!stepsInput) return;
@@ -4661,20 +4690,26 @@ const Fitbit = {
       return;
     }
 
-    let updated = 0;
-    let noData  = 0; // Fitbit returned null or 0 (device likely not synced for that day)
+    let updated  = 0;
+    let zeroData = 0; // Fitbit returned 0 (device not worn / not synced that day)
+    let errors   = 0;
+    let lastError = '';
 
     for (const entry of toSync) {
-      const steps = await Fitbit.fetchSteps(entry.date);
+      const { steps, error } = await Fitbit.fetchSteps(entry.date);
 
-      // If tokens were wiped mid-sync (auth failure in fetchSteps), abort
+      // If tokens were wiped mid-sync (auth failure), abort
       if (!State.profile.fitbit?.accessToken) break;
 
-      if (steps !== null && steps > 0) {
+      if (error) {
+        errors++;
+        lastError = error;
+        console.warn(`Fitbit sync error for ${entry.date}:`, error);
+      } else if (steps !== null && steps > 0) {
         const idx = State.entries.findIndex(e => e.date === entry.date);
         if (idx !== -1) { State.entries[idx].stepsCount = steps; updated++; }
       } else {
-        noData++;
+        zeroData++; // Fitbit returned 0 (device not worn or truly no data)
       }
       // Respect Fitbit's rate limit (150 calls/hour; 150ms gap keeps well under it)
       await new Promise(r => setTimeout(r, 150));
@@ -4694,15 +4729,20 @@ const Fitbit = {
       return;
     }
 
-    if (updated > 0) {
-      const extra = noData > 0
-        ? ` Fitbit had no data for ${noData} date${noData > 1 ? 's' : ''} — make sure your device has synced.`
-        : '';
-      UI.showToast(`Steps synced for ${updated} entr${updated === 1 ? 'y' : 'ies'}.${extra}`, 'success');
+    if (errors > 0 && updated === 0) {
+      // All calls failed — show the actual error so the user knows what's wrong
+      UI.showToast(`Fitbit sync failed: ${lastError}`, 'error');
+    } else if (updated > 0) {
+      const parts = [`Steps synced for ${updated} entr${updated === 1 ? 'y' : 'ies'}.`];
+      if (zeroData > 0) parts.push(`Fitbit had no steps for ${zeroData} date${zeroData > 1 ? 's' : ''} (device not worn?).`);
+      if (errors > 0)   parts.push(`${errors} date${errors > 1 ? 's' : ''} failed: ${lastError}`);
+      UI.showToast(parts.join(' '), 'success');
     } else {
+      // All returned 0 — device likely not synced
+      const errDetail = errors > 0 ? ` Last error: ${lastError}` : '';
       UI.showToast(
-        `Fitbit returned no step data for ${noData} date${noData > 1 ? 's' : ''}. ` +
-        'Make sure your Fitbit device has synced to the Fitbit app recently, then try again.',
+        `Fitbit returned 0 steps for all ${zeroData + errors} date${zeroData + errors > 1 ? 's' : ''}. ` +
+        `Make sure your Fitbit device is synced to the app.${errDetail}`,
         'warning'
       );
     }

@@ -3,7 +3,7 @@
    Cache-first strategy for core app assets.
    ============================================================ */
 
-const CACHE_NAME = 'forge-protocol-v3';
+const CACHE_NAME = 'forge-protocol-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
