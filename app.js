@@ -1980,9 +1980,15 @@ const Entry = {
   },
 
   _initForm(today) {
+    // Clone the entire form first to strip all stale event listeners
+    const form = document.getElementById('daily-entry-form');
+    if (!form) return;
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+
+    // Now get fresh references from the live DOM
     const dateInput   = document.getElementById('entry-date');
     const weightInput = document.getElementById('entry-weight');
-    if (!dateInput || !weightInput) return;
 
     if (!dateInput.value) dateInput.value = today;
 
@@ -2008,8 +2014,6 @@ const Entry = {
       Coach.renderCheckInPanel(dateStr);
     };
 
-    _applyExistingState(dateInput.value || today);
-
     const liveUpdate = () => {
       const date = document.getElementById('entry-date').value;
       const weight = parseFloat(document.getElementById('entry-weight').value);
@@ -2020,25 +2024,21 @@ const Entry = {
       }
     };
 
-    // Clone weight input to remove stale listeners
-    const newWeight = weightInput.cloneNode(true);
-    weightInput.parentNode.replaceChild(newWeight, weightInput);
-    newWeight.addEventListener('input', liveUpdate);
-    newWeight.addEventListener('change', liveUpdate);
-
-    // Clone date input
-    const newDate = dateInput.cloneNode(true);
-    dateInput.parentNode.replaceChild(newDate, dateInput);
-    newDate.addEventListener('change', () => {
-      _applyExistingState(newDate.value);
+    // Bind date change — triggers pre-fill when an existing date is selected
+    dateInput.addEventListener('change', () => {
+      _applyExistingState(dateInput.value);
       liveUpdate();
     });
 
+    // Bind weight live update
+    weightInput.addEventListener('input', liveUpdate);
+    weightInput.addEventListener('change', liveUpdate);
+
     // Form submit
-    const form = document.getElementById('daily-entry-form');
-    const newForm = form.cloneNode(true);
-    form.parentNode.replaceChild(newForm, form);
     document.getElementById('daily-entry-form').addEventListener('submit', Entry.handleSubmit);
+
+    // Apply initial state (fills form if today already has an entry)
+    _applyExistingState(dateInput.value || today);
 
     // Sliders
     const hungerSlider = document.getElementById('entry-hunger');
