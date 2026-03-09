@@ -4605,35 +4605,44 @@ const Fitbit = {
   // ── Historical sync ──
 
   /**
-   * Fetch and backfill Fitbit step counts for all entries that are missing them.
-   * Skips entries that already have a stepsCount. Shows progress and a summary toast.
+   * Fetch and backfill Fitbit step counts for entries with no steps (null, undefined, or 0).
+   * 0 is treated as "not yet recorded" — Fitbit will return the real count from the server.
    */
   async syncHistorical() {
-    if (!Fitbit.isConnected()) return;
+    if (!Fitbit.isConnected()) {
+      UI.showToast('Fitbit is not connected. Go to Profile to reconnect.', 'warning');
+      return;
+    }
 
     const syncBtn = document.getElementById('fitbit-sync-btn');
     if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = 'Syncing…'; }
 
-    const missing = State.entries.filter(e => e.stepsCount === null || e.stepsCount === undefined);
+    // Include entries where stepsCount is null, undefined, or 0
+    // (0 is treated as "no data recorded" — Fitbit will return the real count)
+    const toSync = State.entries.filter(e => !e.stepsCount);
 
-    if (missing.length === 0) {
-      UI.showToast('All entries already have step counts.', 'info');
+    if (toSync.length === 0) {
+      UI.showToast('All entries already have step counts from Fitbit.', 'info');
       if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = 'Sync Past Steps'; }
       return;
     }
 
     let updated = 0;
-    let failed  = 0;
+    let noData  = 0; // Fitbit returned null or 0 (device likely not synced for that day)
 
-    for (const entry of missing) {
+    for (const entry of toSync) {
       const steps = await Fitbit.fetchSteps(entry.date);
-      if (steps !== null) {
+
+      // If tokens were wiped mid-sync (auth failure in fetchSteps), abort
+      if (!State.profile.fitbit?.accessToken) break;
+
+      if (steps !== null && steps > 0) {
         const idx = State.entries.findIndex(e => e.date === entry.date);
         if (idx !== -1) { State.entries[idx].stepsCount = steps; updated++; }
       } else {
-        failed++;
+        noData++;
       }
-      // Small delay to avoid hitting Fitbit's rate limit (150 calls/hour)
+      // Respect Fitbit's rate limit (150 calls/hour; 150ms gap keeps well under it)
       await new Promise(r => setTimeout(r, 150));
     }
 
@@ -4644,10 +4653,25 @@ const Fitbit = {
 
     if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = 'Sync Past Steps'; }
 
-    const msg = updated > 0
-      ? `Steps synced for ${updated} entr${updated === 1 ? 'y' : 'ies'}.${failed > 0 ? ` ${failed} could not be fetched from Fitbit.` : ''}`
-      : 'No new step data found from Fitbit.';
-    UI.showToast(msg, updated > 0 ? 'success' : 'info');
+    // Auth failure: tokens were wiped during sync
+    if (!Fitbit.isConnected()) {
+      UI.showToast('Fitbit session expired. Please reconnect in Profile.', 'warning');
+      Fitbit._updateProfileUI();
+      return;
+    }
+
+    if (updated > 0) {
+      const extra = noData > 0
+        ? ` Fitbit had no data for ${noData} date${noData > 1 ? 's' : ''} — make sure your device has synced.`
+        : '';
+      UI.showToast(`Steps synced for ${updated} entr${updated === 1 ? 'y' : 'ies'}.${extra}`, 'success');
+    } else {
+      UI.showToast(
+        `Fitbit returned no step data for ${noData} date${noData > 1 ? 's' : ''}. ` +
+        'Make sure your Fitbit device has synced to the Fitbit app recently, then try again.',
+        'warning'
+      );
+    }
     Fitbit._updateProfileUI();
   },
 
@@ -4673,13 +4697,13 @@ const Fitbit = {
     // Show sync row and entry counts only when connected
     if (syncRow) syncRow.classList.toggle('hidden', !connected);
     if (stepsInfo && connected) {
-      const total      = State.entries.length;
-      const withSteps  = State.entries.filter(e => e.stepsCount !== null && e.stepsCount !== undefined).length;
-      const missing    = total - withSteps;
+      const total     = State.entries.length;
+      const withSteps = State.entries.filter(e => e.stepsCount > 0).length;
+      const missing   = total - withSteps;
       stepsInfo.textContent = total === 0
-        ? 'New entries will auto-fill steps from Fitbit.'
-        : `${withSteps} of ${total} entr${total === 1 ? 'y has' : 'ies have'} steps logged.`
-          + (missing > 0 ? ` Click "Sync Past Steps" to fill in the ${missing} missing.` : ' All entries are covered.');
+        ? 'New entries will auto-fill steps from Fitbit when you open Log Entry.'
+        : `${withSteps} of ${total} entr${total === 1 ? 'y has' : 'ies have'} steps recorded.`
+          + (missing > 0 ? ` Click "Sync Past Steps" to pull the ${missing} missing from Fitbit.` : ' All entries are covered.');
     }
   }
 };
