@@ -3287,18 +3287,30 @@ const Charts = {
     });
   },
 
-  /** Multi-line chart: waist, bicep, thigh measurements */
+  /** Multi-line chart: waist, bicep, thigh measurements with trend lines */
   _createMeasurementsChart(labels, entries) {
     const cfg = Charts._baseConfig();
     cfg.scales.y.title = { display: true, text: 'cm', color: '#6b7280' };
+
+    const waistData = entries.map(e => e.waistCm);
+    const bicepData = entries.map(e => e.bicepCm);
+    const thighData = entries.map(e => e.thighCm);
+
+    const waistTrend = Charts._calcLinearRegression(waistData);
+    const bicepTrend = Charts._calcLinearRegression(bicepData);
+    const thighTrend = Charts._calcLinearRegression(thighData);
+
     State.charts.measurements = new Chart(document.getElementById('chart-measurements'), {
       type: 'line',
       data: {
         labels,
         datasets: [
-          { label: 'Waist (cm)', data: entries.map(e => e.waistCm), borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false },
-          { label: 'Bicep (cm)', data: entries.map(e => e.bicepCm), borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.1)', borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false },
-          { label: 'Thigh (cm)', data: entries.map(e => e.thighCm), borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)',  borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: false }
+          { label: 'Waist (cm)', data: waistData, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: true },
+          { label: 'Bicep (cm)', data: bicepData, borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.1)', borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: true },
+          { label: 'Thigh (cm)', data: thighData, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)',  borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: true },
+          { label: 'Waist trend', data: waistTrend, borderColor: '#f87171', borderWidth: 1.5, borderDash: [5, 3], pointRadius: 0, fill: false, spanGaps: true, tension: 0 },
+          { label: 'Bicep trend', data: bicepTrend, borderColor: '#a78bfa', borderWidth: 1.5, borderDash: [5, 3], pointRadius: 0, fill: false, spanGaps: true, tension: 0 },
+          { label: 'Thigh trend', data: thighTrend, borderColor: '#38bdf8', borderWidth: 1.5, borderDash: [5, 3], pointRadius: 0, fill: false, spanGaps: true, tension: 0 },
         ]
       },
       options: cfg
